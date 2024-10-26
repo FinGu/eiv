@@ -133,7 +133,7 @@ impl Value {
 
         let argument = *self.as_number().unwrap() as i32;
 
-        let index = if argument < 0 {
+        let index = if argument < 0 { // allow for negative indexing
             bounds + argument
         } else {
             argument

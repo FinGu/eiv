@@ -1,0 +1,16 @@
+include "string.eiv"
+
+test = string("abc")
+
+println(test.at(0), test.at(1), test.at(2))
+println(test)
+
+neu = string("")
+
+len = test.length()
+
+for i = test.length() - 1; i >= 0; i -= 1{
+    neu += test.at(i)
+}
+
+println(neu)

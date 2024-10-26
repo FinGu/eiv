@@ -62,9 +62,9 @@ impl VarMap {
     }
 
     pub fn get(&self, k: &str) -> Option<&Value> {
-        if let Some(first) = self.list.get(k){
+        /*if let Some(first) = self.list.get(k){
             return Some(first);
-        }
+        }*/
 
         self.inner
             .as_ref()
