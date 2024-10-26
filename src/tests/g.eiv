@@ -1,0 +1,5 @@
+a = true
+
+println(a)
+
+println(a number)

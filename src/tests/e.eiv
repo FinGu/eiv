@@ -1,0 +1,11 @@
+abc = [1, 2, 3, 4]
+
+fun = (entrada){
+    for i = 0; i < entrada.length; i += 1{
+        print(entrada[i])
+    }
+    print('\n')
+}
+
+
+fun(abc)

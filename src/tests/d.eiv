@@ -1,0 +1,33 @@
+include "string.eiv"
+
+struct_def = {
+    constructor = (){
+        println(string("abc"))
+    }
+
+    stat struct = {
+        stat obj = 5
+    }
+
+    stat fun = (){
+        println(string("hello"))
+    }
+
+    stat test = (abc){
+        println(abc)
+    }
+
+    stat bruh = 5
+}
+
+struct_def::fun()
+
+struct_def::test(string("jfadklsj"))
+
+dfg = struct_def()
+
+dfg.a = 123
+
+println(dfg.a)
+
+println(struct_def::struct::obj)

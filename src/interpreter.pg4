@@ -1,0 +1,61 @@
+grammar interpreter;
+
+program: declaration* EOF;
+
+declaration: either_declaration EOS | statement;
+
+call_declaration: call? either_declaration;
+
+either_declaration: normal_declaration | shorthand_declaration;
+
+normal_declaration: '=' (fn_declaration | class_declaration | array_declaration | expression);
+
+shorthand_declaration: ('+=' | '-=' | '*=' | '/=')expression;
+
+function_lim_declaration: 'stat'? IDENTIFIER '=' fn_declaration;
+
+class_declaration: '{' function_lim_declaration* '}';
+
+arguments: expression (','expression)*;
+array_declaration: '[' arguments? ']';
+
+fn_declaration: '(' fn_parameters? ')' block;
+fn_parameters: IDENTIFIER (',' IDENTIFIER )*;
+
+statement: expression_stmt | block | if_stmt | while_stmt | break_stmt | continue_stmt | return_stmt | break_stmt | include_stmt;
+
+expression_stmt: expression EOS;
+
+block: '{' declaration* '}';
+
+if_stmt: 'if' expression block ('else' (if_stmt | block))?;
+
+while_stmt: 'while' expression block;
+
+for_stmt: 'for' either_declaration? EOS expression? EOS either_declaration? block;
+
+break_stmt 'break' EOS;
+continue_stmt 'continue' EOS;
+return_stmt: 'return' expression EOS;
+include_stmt: 'include' (STRING | '<' IDENTIFIER '>') EOS;
+
+expression: equality (('&&' | '||') equality)*;
+equality: comparison (('!=' | '==') comparison)*;
+comparison: term (('>' | '>=' | '<' | '<=') term)*;
+term: factor (('+' | '-') factor)*;
+factor: unary (('%' | '*' | '/') unary)*;
+
+unary: ('!' | '-' ) unary | cast;
+
+cast_type: 'number' | 'char' | 'bool';
+cast: call ('as' cast_type)*;
+
+call: primary ('[' expression ']' | '(' arguments? ')' | '.' IDENTIFIER | '::' IDENTIFIER)*; 
+
+primary: NUMBER | STRING | 'true' | 'false' | 'null' | 'this' | '(' expression ')' | '[' arguments? ']' | IDENTIFIER;
+
+EOS: ';' | '\n';
+NUMBER: [0-9]+;
+STRING: '"' (~["\r\n] | '\\"')* '"';
+IDENTIFIER: [a-zA-Z_][a-zA-Z_0-9]*;
+WS: [ \t\r\n]+ -> skip;

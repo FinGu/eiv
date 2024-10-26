@@ -1,0 +1,10 @@
+struct_definition = {
+    constructor = (){
+        this.my_var = 10 
+    }
+}
+
+instance = struct_definition()
+println(instance)
+
+println(instance.my_var)

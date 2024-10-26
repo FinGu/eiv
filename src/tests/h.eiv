@@ -1,0 +1,11 @@
+a = 'a'
+
+b = 'b'
+
+println(println(a number / b number) number)
+
+if a == b{
+    println(true)
+} else{
+    println(false)
+}

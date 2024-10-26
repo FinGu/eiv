@@ -1,0 +1,53 @@
+string = {
+    _type_ = "string"
+
+    constructor = (in){
+        this.vec = []
+        
+        this.vec += in
+    }
+
+    _add_ = (to_add){
+        return string(this.vec + to_add)
+    }
+    
+    _display_ = (){
+        for i = 0; i < this.length(); i += 1{
+            print(this.vec[i])
+        }
+    }
+
+    _eq_ = (in){ 
+        type_of_in = typeof(in)
+
+        if type_of_in == "array"{
+            if in != this.vec{
+                return false
+            }
+
+            return true
+        }
+
+        if type_of_in == "string"{         
+            if in.vec != this.vec{
+                return false
+            }
+
+            return true
+        }
+
+        return false
+    }
+
+    push = (in){
+        this.vec += in
+    }
+
+    length = (){
+        return this.vec.length
+    }
+
+    at = (i) {
+        return this.vec[i]
+    }
+}

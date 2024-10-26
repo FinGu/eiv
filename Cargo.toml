@@ -1,0 +1,8 @@
+[package]
+name = "interpreter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+enum-as-inner = "0.6.0"
+thiserror = "1.0.63"

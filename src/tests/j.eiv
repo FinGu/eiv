@@ -1,0 +1,7 @@
+add = (a, b){
+    return a as number + b as number
+}
+
+dfg = 3 
+
+println(add(dfg, 10))

@@ -1,0 +1,9 @@
+include "string.eiv"
+
+texto = string("abc")
+
+if texto == "dfg"{
+    println(string("eh igual"))
+} else{
+    println(string("falha"))
+}
