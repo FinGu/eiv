@@ -11,7 +11,7 @@ use structs::{
 use ustructs::{UserStructDef, UserStructInst};
 
 use crate::{
-    errors, lexer::TokenType, utils, vars::{self, VarMap, VARMAP}
+    errors, lexer::TokenType, utils, vars::{self, VarMap}
 };
 
 impl<Visitor, T> Accept<Visitor> for LiteralExpr
@@ -313,18 +313,34 @@ where
     }
 }
 
-pub fn __execute_block(stmt_eval: &StmtEvaluator, statements: &Vec<Statement>) -> ControlFlowType {
+pub fn __execute_block_without_cleanup(stmt_eval: &StmtEvaluator, statements: &Vec<Statement>, env: &mut VarMap) -> ControlFlowType {
+    vars::set_environment(env.clone());
+
     for stat in statements {
         let result = stat.accept(stmt_eval);
 
         match result {
             // in case it's a break or continue we have to propagate upwards
             ControlFlowType::None => {}
-            out => return out,
+            out => {
+                return out
+            },
         }
     }
 
     ControlFlowType::None
+}
+
+pub fn __execute_block(stmt_eval: &StmtEvaluator, statements: &Vec<Statement>, env: &mut VarMap) -> ControlFlowType {
+    let old_env = vars::clone_environment();
+
+    let result = __execute_block_without_cleanup(stmt_eval, statements, env);
+
+    *env = vars::clone_environment();
+
+    vars::set_environment(old_env);
+
+    result
 }
 
 pub struct StmtEvaluator;
@@ -353,15 +369,15 @@ impl StmtVisitor for StmtEvaluator {
 
         let as_copy: Value = match expr_value {
             Value::Array(arr) => arr.lock().unwrap().clone().into(),
-            Value::StructInst(inst) => {
-                let env = (*inst.env.lock().unwrap()).clone();
+            Value::StructInst(ref inst) => {
+                let env = inst.0.lock().unwrap().clone();
 
                 UserStructInst::new(env).into()
             }
             _ => expr_value,
         };
 
-        VARMAP.lock().unwrap().insert(name.clone(), as_copy);
+        vars::insert(name.clone(), as_copy);
 
         ControlFlowType::None
     }
@@ -373,10 +389,9 @@ impl StmtVisitor for StmtEvaluator {
             .as_identifier()
             .expect("Unexpected lexing of the name of the function");
 
-        VARMAP.lock().unwrap().insert(
-            name.clone(),
-            UserFunction::new(expr.params.clone(), expr.body.clone()).into(),
-        );
+        let func: Value = UserFunction::new(expr.clone(), vars::clone_environment()).into();
+
+        vars::insert(name.clone(), func);
 
         ControlFlowType::None
     }
@@ -390,23 +405,21 @@ impl StmtVisitor for StmtEvaluator {
 
         let strct = UserStructDef::new(self, &expr.methods);
 
-        VARMAP.lock().unwrap().insert(name.clone(), strct.into());
+        vars::insert(name.clone(), strct.into());
 
         ControlFlowType::None
     }
 
     fn visit_block_stmt(&self, expr: &BlockStmt) -> Self::Output {
-        if expr.is_standalone {
-            vars::create_inner(false);
+        let mut vmap = vars::clone_environment();
+
+        if !expr.is_standalone{
+            return __execute_block_without_cleanup(self, &expr.statements, &mut vmap);
         }
 
-        let result = __execute_block(self, &expr.statements);
+        let mut map = VarMap::new(Some(Box::new(vmap)));
 
-        if expr.is_standalone {
-            vars::delete_inner();
-        }
-
-        result
+        __execute_block(self, &expr.statements, &mut map)
     }
 
     fn visit_if_stmt(&self, expr: &IfStmt) -> Self::Output {
@@ -460,6 +473,7 @@ impl StmtVisitor for StmtEvaluator {
                     }
 
                     continue;
+
                 }
                 ControlFlowType::Return(ret) => {
                     return ControlFlowType::Return(ret);
@@ -506,22 +520,20 @@ impl StmtVisitor for StmtEvaluator {
     fn visit_set_stmt(&self, expr: &SetStmt) -> Self::Output {
         let eval = ExprEvaluator;
 
-        let caller = expr.callee.accept(&eval);
+        let mut caller = expr.callee.accept(&eval);
 
-        let insert_into_env = |env: &Mutex<VarMap>| {
-            let mut guard = env.lock().unwrap();
-
+        let insert_into_env = |env: &mut UserStructInst| {
             let name = expr.name.token_type.as_identifier().unwrap().clone();
 
             let rvalue = expr.rvalue.accept(&eval);
 
             if expr.op.token_type.is_equal() {
-                guard.insert(name, rvalue);
+                env.set(name, rvalue);
                 return;
             }
 
             //is of type
-            let lvalue = match guard.get(&name).cloned() {
+            let lvalue = match env.get(&name, true){
                 Some(val) => val,
                 None => Value::Null,
             };
@@ -535,15 +547,12 @@ impl StmtVisitor for StmtEvaluator {
                 _ => unreachable!(),
             };
 
-            guard.insert(name, result);
+            env.set(name, result);
         };
 
         match caller {
-            Value::__StructEnv(ref inst) => {
+            Value::StructInst(ref mut inst) => {
                 insert_into_env(inst);
-            }
-            Value::StructInst(ref inst) => {
-                insert_into_env(&inst.env);
             } //we don't allow static set stmts
             _ => {
                 errors::LIST
@@ -615,9 +624,11 @@ impl ExprEvaluator {
                 [(*left).clone(), (*right).clone()].concat().into()
             }
             (Value::Array(l), r) => self.push_to_arr(&l, r).into(),
-            (Value::StructInst(l), r) => {
+            (Value::StructInst(mut l), r) => {
                 let func = match l.get_with_this_as_func("_add_") {
-                    Some(v) => v,
+                    Some(v) => {
+                        v
+                    },
                     None => {
                         errors::LIST
                             .lock()
@@ -632,7 +643,7 @@ impl ExprEvaluator {
             _ => errors::LIST
                 .lock()
                 .unwrap()
-                .push(AstError::InvalidUseOfAddOperator, None),
+                .push(AstError::InvalidUseOfAddOperator, None)
         }
     }
 
@@ -665,8 +676,6 @@ impl ExprEvaluator {
                 .push(AstError::InvalidUseOfModOperator, None),
         }
     }
-
-
 
     fn divide(&self, left: Value, right: Value) -> Value {
         match (left, right) {
@@ -723,7 +732,7 @@ impl ExprEvaluator {
 
     fn equal(&self, left: Value, right: Value, not: bool) -> Value {
         match (left, right) {
-            (Value::StructInst(l), r) => {
+            (Value::StructInst(mut l), r) => {
                 let func = match l.get_with_this_as_func("_eq_") {
                     Some(v) => v,
                     None => {
@@ -893,11 +902,7 @@ impl ExprVisitor for ExprEvaluator {
             .as_identifier()
             .expect("Failure converting to identifier at the parser");
 
-        VARMAP
-            .lock()
-            .unwrap()
-            .get(name)
-            .cloned()
+        vars::get(name)
             .unwrap_or(Value::Null)
     }
 
@@ -937,7 +942,7 @@ impl ExprVisitor for ExprEvaluator {
 
         let caller = expr.callee.accept(self);
 
-        if !caller.is_function() && !caller.is_struct_def() {
+        if !caller.is_function() && !caller.is_global_function() && !caller.is_struct_def() {
             errors::LIST
                 .lock()
                 .unwrap()
@@ -954,6 +959,7 @@ impl ExprVisitor for ExprEvaluator {
 
         match caller {
             Value::Function(ref func) => func.call(&eval, self, args),
+            Value::GlobalFunction(ref gfunc) => gfunc.call(&eval, self, args),
             Value::StructDef(ref def) => def.call(&eval, self, args),
             _ => unreachable!(),
         }
@@ -970,7 +976,7 @@ impl ExprVisitor for ExprEvaluator {
             .to_string();
 
         match caller {
-            Value::StructInst(ref inst) => {
+            Value::StructInst(mut inst) => {
                 if expr.is_static {
                     errors::LIST
                         .lock()
@@ -980,22 +986,6 @@ impl ExprVisitor for ExprEvaluator {
                 }
 
                 inst.get_with_this(argument).unwrap_or(Value::Null)
-            }
-            Value::__StructEnv(ref env) => {
-                //a 'this' expression
-                if expr.is_static {
-                    errors::LIST
-                        .lock()
-                        .unwrap()
-                        .push(AstError::BadGetExpression, None);
-                    return Value::Null;
-                }
-
-                env.lock()
-                    .unwrap()
-                    .get(argument)
-                    .unwrap_or(&Value::Null)
-                    .clone()
             }
             Value::StructDef(ref def) => {
                 if !expr.is_static {
@@ -1007,11 +997,8 @@ impl ExprVisitor for ExprEvaluator {
                 }
 
                 def.env
-                    .lock()
-                    .unwrap()
                     .get(argument)
-                    .unwrap_or(&Value::Null)
-                    .clone()
+                    .unwrap_or(Value::Null)
             }
             Value::Array(ref arr) => arr.get_internal_var(argument),
             _ => {
@@ -1026,10 +1013,8 @@ impl ExprVisitor for ExprEvaluator {
     }
 
     fn visit_this_expr(&self, expr: &ThisExpr) -> Self::Output {
-        let guard = VARMAP.lock().unwrap();
-
-        match guard.get("this") {
-            Some(val) => val.clone(),
+        match vars::get("this"){
+            Some(val) => val,
             None => {
                 errors::LIST
                     .lock()
@@ -1054,10 +1039,8 @@ impl Interpreter {
         let funcs: Vec<Box<dyn Callable>> =
             vec![Box::new(Clock), Box::new(Print), Box::new(PrintLn), Box::new(TypeOf), Box::new(_TypeOf)];
 
-        let mut var_map = VARMAP.lock().unwrap();
-
         for func in funcs{
-            var_map.insert(func.name(), Value::Function(func)); // map the global functions
+            vars::insert(func.name(), Value::GlobalFunction(func)); //map the global functions
         }
 
         Interpreter

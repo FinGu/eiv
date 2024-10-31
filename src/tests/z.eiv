@@ -1,0 +1,13 @@
+a = {
+    test = (){
+        println(this.big_variable_name)
+    }
+
+    constructor = (){
+        this.big_variable_name = 5
+        this.test()
+    }
+
+}
+
+inst = a()

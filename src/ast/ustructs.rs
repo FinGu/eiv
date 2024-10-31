@@ -1,42 +1,32 @@
 use std::{
-    fmt::Display,
-    ops::Deref,
-    sync::{Arc, Mutex},
+    fmt::Display, ops::Deref, sync::{Arc, Mutex}
 };
 
 use super::{
-    structs::{Accept, AstError, Callable, Environment, Statement, Value},
-    StmtEvaluator,
+    funcs::UserFunction, structs::{AstError, Callable, Statement, Value}, StmtEvaluator, __execute_block 
 };
+
 use crate::{
     errors,
-    vars::{self, VarMap, VARMAP},
+    vars::{self, VarMap},
 };
 
 #[derive(Clone, Debug)]
 pub struct UserStructDef {
     pub inst_methods_and_fields: Vec<Statement>, //Statement and if it is static
-    pub env: Environment,
+    pub env: VarMap,
 }
 
 #[derive(Clone, Debug)]
-pub struct UserStructInst {
-    pub env: Environment,
-}
+pub struct UserStructInst(pub Arc<Mutex<VarMap>>); 
 
 impl UserStructDef {
-    fn accept_static(stmt_eval: &StmtEvaluator, map: &Vec<Statement>) -> Arc<Mutex<VarMap>> {
-        vars::create_inner(false);
+    fn accept_static(stmt_eval: &StmtEvaluator, map: &Vec<Statement>) -> VarMap {
+        let mut env = vars::clone_environment();
 
-        for mf in map {
-            mf.accept(stmt_eval);
-        }
+        __execute_block(stmt_eval, map, &mut env);
 
-        let cloned = vars::clone_inner().unwrap();
-
-        vars::delete_inner();
-
-        Arc::new(Mutex::new(*cloned))
+        env 
     }
 
     pub fn new(stmt_eval: &StmtEvaluator, methods: &Vec<Statement>) -> Self {
@@ -88,33 +78,27 @@ impl Callable for UserStructDef {
         expr_eval: &super::ExprEvaluator,
         args: Vec<Value>,
     ) -> Value {
-        vars::create_inner(false);
+        let mut new_map = VarMap::new(Some(Box::new(self.env.clone())));
 
-        for mf in &self.inst_methods_and_fields {
-            mf.accept(stmt_eval);
-        }
+        __execute_block(stmt_eval, &self.inst_methods_and_fields, &mut new_map);
 
-        let cloned = vars::clone_inner().unwrap();
-
-        let inst = UserStructInst::new(*cloned);
+        let inst = UserStructInst::new(new_map);
 
         let cloned_function = inst.get("constructor", true);
 
         if let Some(cons) = cloned_function {
             match cons {
                 Value::Function(ref fun) => {
-                    fun.call(stmt_eval, expr_eval, args);
+                    fun.bind(&inst).call(stmt_eval, expr_eval, args);
                 }
                 _ => {
                     errors::LIST
-                        .lock()
+                        .lock()                        
                         .unwrap()
                         .push(AstError::ConstructorMustBeFunc, None);
                 }
             }
         }
-
-        vars::delete_inner();
 
         inst.into()
     }
@@ -140,38 +124,28 @@ impl From<UserStructInst> for Value {
     }
 }
 
-impl UserStructInst {
-    pub fn new(env: VarMap) -> Self {
-        Self {
-            env: Arc::new(Mutex::new(env)),
-        }
+impl UserStructInst{
+    pub fn new(inst: VarMap) -> Self{
+        Self(Arc::new(Mutex::new(inst)))
     }
 
-    pub fn get(&self, argument: &str, with_this: bool) -> Option<Value> {
-        if with_this{
-            VARMAP.lock().unwrap().insert(
-                String::from("this"),
-                Value::__StructEnv(Arc::clone(&self.env)),
-            );
-        }
-
-        let env_clone = Arc::clone(&self.env);
-        let temp_box = Box::new(env_clone.lock().unwrap().clone());
-
-        vars::set_inner(temp_box);
-
-        let callable = VARMAP.lock().unwrap().get(argument).cloned();
-
-        vars::delete_inner();
-
-        callable
+    pub fn get(&self, argument: &str, with_this: bool) -> Option<Value>{
+        self.0.lock().unwrap().get(argument).map(|val| if val.is_function() && with_this{
+            val.as_function().unwrap().bind(self).into()
+        } else{
+            val
+        })
     }
 
-    pub fn get_with_this(&self, argument: &str) -> Option<Value> {
+    pub fn set(&mut self, argument: String, val: Value){
+        self.0.lock().unwrap().insert(argument, val);
+    }
+    
+    pub fn get_with_this(&mut self, argument: &str) -> Option<Value> {
         self.get(argument, true)
     }
 
-    pub fn get_with_this_as_func(&self, argument: &str) -> Option<Box<dyn Callable>> {
+    pub fn get_with_this_as_func(&mut self, argument: &str) -> Option<UserFunction> {
         let val = self.get(argument, true)?;
 
         if !val.is_function() {
@@ -180,6 +154,7 @@ impl UserStructInst {
 
         Some(val.as_function().unwrap().clone())
     }
+
 }
 
 #[derive(Clone, Debug)]

@@ -1,10 +1,7 @@
 use enum_as_inner::EnumAsInner;
-use std::{
-    fmt::{Debug, Display},
-    sync::{Arc, Mutex},
-};
+use std::fmt::{Debug, Display};
 
-use crate::{lexer::Token, vars::VarMap};
+use crate::lexer::Token;
 use thiserror::Error;
 
 use super::{
@@ -87,8 +84,6 @@ pub enum ControlFlowType {
     None,
 }
 
-pub type Environment = Arc<Mutex<VarMap>>;
-
 pub trait Callable: Sync + Send {
     fn arity(&self) -> usize;
 
@@ -117,11 +112,11 @@ pub enum Value {
     Number(f64),
     Char(u8),
     Boolean(bool),
-    Function(Box<dyn Callable>),
+    Function(UserFunction),
+    GlobalFunction(Box<dyn Callable>),
     Array(UserArray),
     StructDef(UserStructDef),
     StructInst(UserStructInst),
-    __StructEnv(Environment),
     Null,
 }
 
@@ -187,9 +182,9 @@ impl Display for Value {
                 }
             }
             Self::Function(_) => write!(f, "<function>"),
+            Self::GlobalFunction(_) => write!(f, "<global function>"),
             Self::StructDef(_) => write!(f, "<struct def>"),
             Self::StructInst(_) => write!(f, "<struct inst>"),
-            Self::__StructEnv(_) => write!(f, "<this>"),
             Self::Array(ref arr) => write!(f, "{}", arr),
         }
     }
@@ -201,7 +196,7 @@ impl From<Vec<Value>> for Value {
     }
 }
 
-impl From<Vec<u8>> for Value {
+impl From<Vec<u8>> for Value{
     fn from(value: Vec<u8>) -> Self {
         let mut vec = Vec::<Value>::new();
 
@@ -215,7 +210,7 @@ impl From<Vec<u8>> for Value {
 
 impl From<UserFunction> for Value {
     fn from(value: UserFunction) -> Self {
-        Self::Function(Box::new(value))
+        Self::Function(value)
     }
 }
 

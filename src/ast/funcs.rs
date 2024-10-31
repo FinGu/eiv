@@ -1,16 +1,13 @@
-use std::{
-    collections::HashMap,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    ast::{__execute_block, structs::AstError},
+    ast::structs::AstError,
     errors,
     vars::{self, VarMap},
 };
 
 use super::{
-    structs::{Accept, Callable, ControlFlowType, Statement, Value}, ustructs::UserArray, ExprEvaluator, StmtEvaluator
+    structs::{Accept, Callable, ControlFlowType, FnStmt, Value}, ustructs::{UserArray, UserStructInst}, ExprEvaluator, StmtEvaluator, __execute_block_without_cleanup
 };
 
 #[derive(Copy, Clone)]
@@ -51,9 +48,9 @@ impl Callable for Print {
         &self,
         stmt_eval: &StmtEvaluator,
         expr_eval: &ExprEvaluator,
-        args: Vec<Value>,
+        mut args: Vec<Value>,
     ) -> Value {
-        for arg in &args {
+        for arg in &mut args {
             if let Value::StructInst(inst) = arg {
                 if let Some(fun) = inst.get_with_this_as_func("_display_"){
                     fun.call(stmt_eval, expr_eval, Vec::new());
@@ -135,8 +132,9 @@ impl Callable for _TypeOf {
             Value::Number(_) => "number",
             Value::Boolean(_) => "bool",
             Value::Function(_) => "function",
+            Value::GlobalFunction(_) => "global_function",
             Value::StructDef(_) => "struct_definition",
-            Value::StructInst(_) | Value::__StructEnv(_) => "struct_instance",
+            Value::StructInst(_) => "struct_instance",
             Value::Null => "null"
         };
 
@@ -181,26 +179,10 @@ impl Callable for TypeOf {
             return Value::Null;
         }
 
+        let mut args = args;
+
         match args[0]{
-            Value::__StructEnv(ref inst) => {
-                let linst = inst.lock().unwrap();
-
-                if let Some(fun) = linst.get("_type_"){
-                    if !fun.is_array() {
-                        errors::LIST
-                            .lock()
-                            .unwrap()
-                            .push(AstError::OverloadNotOfRightType, None);
-                        return Value::Null;
-                    }
-
-                    return fun
-                        .as_array().unwrap()
-                        .lock().unwrap()
-                        .clone().into();
-                }
-            }
-            Value::StructInst(ref inst) => {
+            Value::StructInst(ref mut inst) => {
                 if let Some(fun) = inst.get("_type_", false){
                     if !fun.is_array() {
                         errors::LIST
@@ -232,23 +214,32 @@ impl Callable for TypeOf {
     }
 }
 
-
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UserFunction {
-    pub params: Vec<String>,
-    pub body: Vec<Statement>,
+    pub decl: FnStmt,
+    pub env: VarMap,
 }
 
 impl UserFunction {
-    pub fn new(params: Vec<String>, body: Vec<Statement>) -> Self {
-        Self { params, body }
+    pub fn new(decl: FnStmt, env: VarMap) -> Self {
+        Self { decl, env }
+    }
+
+    pub fn bind(&self, inst: &UserStructInst) -> Self{
+        let in_use_env = vars::clone_environment();
+    
+        let mut new_env = VarMap::new(Some(Box::new(in_use_env)));
+    
+        new_env.insert(String::from("this"), Value::StructInst(inst.clone()));
+        //method env -> instance env -> global env 
+    
+        UserFunction::new(self.decl.clone(), new_env)
     }
 }
 
 impl Callable for UserFunction {
     fn arity(&self) -> usize {
-        self.params.len()
+        self.decl.params.len()
     }
 
     fn call(
@@ -257,7 +248,7 @@ impl Callable for UserFunction {
         expr_eval: &ExprEvaluator,
         args: Vec<Value>,
     ) -> Value {
-        if args.len() != self.params.len() {
+        if args.len() != self.arity() {
             errors::LIST
                 .lock()
                 .unwrap()
@@ -265,40 +256,32 @@ impl Callable for UserFunction {
             return Value::Null;
         }
 
-        let mut env = Box::new(VarMap::new(true, HashMap::new(), None));
+        let mut env = VarMap::new(Some(Box::new(self.env.clone())));
 
-        for (param, value) in self.params.iter().zip(args.into_iter()) {
-            env.insert_to_cur(param.clone(), value);
+        for (param, value) in self.decl.params.iter().zip(args.into_iter()) {
+            env.insert(param.clone(), value);
         }
 
-        vars::set_inner(env);
+        let old_map = vars::clone_environment();
 
-        let cflow = __execute_block(stmt_eval, &self.body);
+        let cflow = __execute_block_without_cleanup(stmt_eval, &self.decl.body, &mut env);
 
-        match cflow {
-            ControlFlowType::Return(val) => {
-                let result = val.accept(expr_eval);
-
-                vars::delete_inner(); //we delete after evaluating the return
-
-                result
-            }
-            ControlFlowType::None => {
-                vars::delete_inner();
-
-                Value::Null
-            }
+        let result = match cflow{
+            ControlFlowType::Return(val) => val.accept(expr_eval),
+            ControlFlowType::None => Value::Null,
             _ => {
                 errors::LIST
                     .lock()
                     .unwrap()
                     .push(AstError::InvalidControlFlowStmt, None);
-
-                vars::delete_inner();
-
+                
                 Value::Null
             }
-        }
+        };
+
+        vars::set_environment(old_map);
+
+        result
     }
 
     fn name(&self) -> String {
