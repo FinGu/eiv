@@ -1,22 +1,30 @@
 use std::{
     collections::HashMap,
-    sync::{LazyLock, Mutex},
+    sync::{Arc, LazyLock, Mutex},
 };
 
 use crate::ast::structs::Value;
 
-pub struct Environment(pub VarMap);
+pub type SharedMap = Arc<Mutex<VarMap>>;
+
+pub struct Environment(pub SharedMap);
+
+impl Environment{
+    pub fn new(env: VarMap) -> Self{
+        Self(env.into())
+    }
+}
 
 type MapType = HashMap<String, Value>;
 
 #[derive(Debug, Clone)]
 pub struct VarMap {
-    pub inner: Option<Box<VarMap>>,
+    pub inner: Option<SharedMap>,
     pub list: MapType,
 }
 
 impl VarMap {
-    pub fn new(inner: Option<Box<VarMap>>) -> Self {
+    pub fn new(inner: Option<SharedMap>) -> Self {
         Self {
             list: MapType::new(),
             inner,
@@ -27,7 +35,7 @@ impl VarMap {
         match self.list.get(name){
             Some(value) => Some(value.clone()),
             None => match &self.inner{
-                Some(inner) => inner.get(name),
+                Some(inner) => inner.lock().unwrap().get(name),
                 None => None,
             }
         }
@@ -41,7 +49,7 @@ impl VarMap {
         self.list.remove(k);
     }
 
-    pub fn print_hierarchy(&self) {
+    /*pub fn print_hierarchy(&self) {
         println!("{:?}", self.list);
 
         let mut cur = &self.inner;
@@ -51,25 +59,31 @@ impl VarMap {
 
             cur = &inn.inner;
         }
+    }*/
+}
+
+impl From<VarMap> for SharedMap{
+    fn from(value: VarMap) -> Self {
+        Arc::new(Mutex::new(value))
     }
 }
 
-pub fn set_environment(new_env: VarMap){
+pub fn set_environment(new_env: SharedMap){
     VARMAP.lock().unwrap().0 = new_env;
 }
 
-pub fn clone_environment() -> VarMap{
+pub fn clone_environment() -> SharedMap{
     VARMAP.lock().unwrap().0.clone()
 }
 
 pub fn insert(name: String, val: Value){
-    VARMAP.lock().unwrap().0.insert(name, val);
+    VARMAP.lock().unwrap().0.lock().unwrap().insert(name, val);
 }
 
 pub fn get(name: &str) -> Option<Value>{
-    VARMAP.lock().unwrap().0.get(name)
+    VARMAP.lock().unwrap().0.lock().unwrap().get(name)
 }
 
 pub static VARMAP: LazyLock<Mutex<Environment>> =
-    LazyLock::new(|| Mutex::new(Environment(VarMap::new(None))));
+    LazyLock::new(|| Mutex::new(Environment::new(VarMap::new(None))));
 

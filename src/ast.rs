@@ -11,7 +11,7 @@ use structs::{
 use ustructs::{UserStructDef, UserStructInst};
 
 use crate::{
-    errors, lexer::TokenType, utils, vars::{self, VarMap}
+    errors, lexer::TokenType, utils, vars::{self, SharedMap, VarMap}
 };
 
 impl<Visitor, T> Accept<Visitor> for LiteralExpr
@@ -313,7 +313,7 @@ where
     }
 }
 
-pub fn __execute_block_without_cleanup(stmt_eval: &StmtEvaluator, statements: &Vec<Statement>, env: &mut VarMap) -> ControlFlowType {
+pub fn __execute_block_without_cleanup(stmt_eval: &StmtEvaluator, statements: &Vec<Statement>, env: &mut SharedMap) -> ControlFlowType {
     vars::set_environment(env.clone());
 
     for stat in statements {
@@ -331,7 +331,7 @@ pub fn __execute_block_without_cleanup(stmt_eval: &StmtEvaluator, statements: &V
     ControlFlowType::None
 }
 
-pub fn __execute_block(stmt_eval: &StmtEvaluator, statements: &Vec<Statement>, env: &mut VarMap) -> ControlFlowType {
+pub fn __execute_block(stmt_eval: &StmtEvaluator, statements: &Vec<Statement>, env: &mut SharedMap) -> ControlFlowType {
     let old_env = vars::clone_environment();
 
     let result = __execute_block_without_cleanup(stmt_eval, statements, env);
@@ -372,7 +372,7 @@ impl StmtVisitor for StmtEvaluator {
             Value::StructInst(ref inst) => {
                 let env = inst.0.lock().unwrap().clone();
 
-                UserStructInst::new(env).into()
+                UserStructInst::new(env.into()).into()
             }
             _ => expr_value,
         };
@@ -417,7 +417,7 @@ impl StmtVisitor for StmtEvaluator {
             return __execute_block_without_cleanup(self, &expr.statements, &mut vmap);
         }
 
-        let mut map = VarMap::new(Some(Box::new(vmap)));
+        let mut map: SharedMap = VarMap::new(Some(vmap.clone())).into();
 
         __execute_block(self, &expr.statements, &mut map)
     }
@@ -997,6 +997,8 @@ impl ExprVisitor for ExprEvaluator {
                 }
 
                 def.env
+                    .lock()
+                    .unwrap()
                     .get(argument)
                     .unwrap_or(Value::Null)
             }

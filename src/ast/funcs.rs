@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::{
     ast::structs::AstError,
     errors,
-    vars::{self, VarMap},
+    vars::{self, SharedMap, VarMap},
 };
 
 use super::{
@@ -217,23 +217,23 @@ impl Callable for TypeOf {
 #[derive(Clone, Debug)]
 pub struct UserFunction {
     pub decl: FnStmt,
-    pub env: VarMap,
+    pub env: SharedMap, 
 }
 
 impl UserFunction {
-    pub fn new(decl: FnStmt, env: VarMap) -> Self {
+    pub fn new(decl: FnStmt, env: SharedMap) -> Self {
         Self { decl, env }
     }
 
     pub fn bind(&self, inst: &UserStructInst) -> Self{
         let in_use_env = vars::clone_environment();
     
-        let mut new_env = VarMap::new(Some(Box::new(in_use_env)));
+        let mut new_env = VarMap::new(Some(in_use_env.clone()));
     
         new_env.insert(String::from("this"), Value::StructInst(inst.clone()));
         //method env -> instance env -> global env 
     
-        UserFunction::new(self.decl.clone(), new_env)
+        UserFunction::new(self.decl.clone(), new_env.into())
     }
 }
 
@@ -256,10 +256,10 @@ impl Callable for UserFunction {
             return Value::Null;
         }
 
-        let mut env = VarMap::new(Some(Box::new(self.env.clone())));
+        let mut env: SharedMap = VarMap::new(Some(self.env.clone())).into();
 
         for (param, value) in self.decl.params.iter().zip(args.into_iter()) {
-            env.insert(param.clone(), value);
+            env.lock().unwrap().insert(param.clone(), value);
         }
 
         let old_map = vars::clone_environment();

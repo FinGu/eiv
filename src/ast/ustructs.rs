@@ -8,20 +8,20 @@ use super::{
 
 use crate::{
     errors,
-    vars::{self, VarMap},
+    vars::{self, SharedMap, VarMap},
 };
 
 #[derive(Clone, Debug)]
 pub struct UserStructDef {
     pub inst_methods_and_fields: Vec<Statement>, //Statement and if it is static
-    pub env: VarMap,
+    pub env: SharedMap, 
 }
 
 #[derive(Clone, Debug)]
-pub struct UserStructInst(pub Arc<Mutex<VarMap>>); 
+pub struct UserStructInst(pub SharedMap); 
 
 impl UserStructDef {
-    fn accept_static(stmt_eval: &StmtEvaluator, map: &Vec<Statement>) -> VarMap {
+    fn accept_static(stmt_eval: &StmtEvaluator, map: &Vec<Statement>) -> SharedMap  {
         let mut env = vars::clone_environment();
 
         __execute_block(stmt_eval, map, &mut env);
@@ -78,7 +78,7 @@ impl Callable for UserStructDef {
         expr_eval: &super::ExprEvaluator,
         args: Vec<Value>,
     ) -> Value {
-        let mut new_map = VarMap::new(Some(Box::new(self.env.clone())));
+        let mut new_map = VarMap::new(Some(self.env.clone())).into();
 
         __execute_block(stmt_eval, &self.inst_methods_and_fields, &mut new_map);
 
@@ -125,8 +125,8 @@ impl From<UserStructInst> for Value {
 }
 
 impl UserStructInst{
-    pub fn new(inst: VarMap) -> Self{
-        Self(Arc::new(Mutex::new(inst)))
+    pub fn new(inst: SharedMap) -> Self{
+        Self(inst)
     }
 
     pub fn get(&self, argument: &str, with_this: bool) -> Option<Value>{
