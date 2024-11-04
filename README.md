@@ -15,7 +15,7 @@ Syntax:
 var_declaration = 5; // ; is optional
 fn_declaration = (){
     //body
-bicho }
+}
 struct_declaration = {
     var = 5;
     method = (){
