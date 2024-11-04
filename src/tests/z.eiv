@@ -1,4 +1,6 @@
 a = {
+    m = 10
+
     test = (){
         println(this.big_variable_name)
     }
@@ -11,3 +13,5 @@ a = {
 }
 
 inst = a()
+
+println(inst.m)
