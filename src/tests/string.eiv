@@ -40,7 +40,7 @@ string = {
     }
 
     push = (in){
-        this.vec += in
+       this.vec += in
     }
 
     length = (){

@@ -9,7 +9,9 @@ mod errors;
 mod lexer;
 mod parser;
 mod utils;
-mod vars;
+//mod vars;
+mod compiler;
+mod vm;
 
 #[cfg(test)]
 mod tests;

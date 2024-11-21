@@ -1,9 +1,9 @@
 use crate::{
-    ast::structs::{
-        ArrayExpr, ArrayGetExpr, ArraySetStmt, BinaryExpr, CallExpr, CastExpr, ControlFlowType, CtrlStmt, ElseStmt, Expression, FnStmt, ForStmt, GetExpr, GroupingExpr, IfStmt, IncludeStmt, LiteralExpr, SetStmt, Statement, StaticStmt, StructStmt, ThisExpr, UnaryExpr, Value, VarExpr, VarStmt, WhileStmt
+    ast::{
+        ArrayExpr, ArrayGetExpr, ArraySetStmt, BinaryExpr, CallExpr, CastExpr, ControlFlowType, CtrlStmt, ElseStmt, Expression, FnStmt, ForStmt, GetExpr, GroupingExpr, IfStmt, IncludeStmt, LiteralExpr, SetStmt, Statement, StaticStmt, StructStmt, ThisExpr, UnaryExpr, VarExpr, VarStmt, WhileStmt
     },
     errors,
-    lexer::{Token, TokenType},
+    lexer::{Token, TokenType}, vm::Immediate,
 };
 use thiserror::Error;
 
@@ -140,15 +140,15 @@ impl Parser {
 
     pub fn get_primary(&mut self, display_errors: bool) -> Expression {
         if self.match_tokens(&[TokenType::Null]) {
-            return LiteralExpr::new(Value::Null).into();
+            return LiteralExpr::new(Immediate::Null).into();
         }
 
         if self.match_tokens(&[TokenType::True]) {
-            return LiteralExpr::new(Value::Boolean(true)).into();
+            return LiteralExpr::new(Immediate::Boolean(true)).into();
         }
 
         if self.match_tokens(&[TokenType::False]) {
-            return LiteralExpr::new(Value::Boolean(false)).into();
+            return LiteralExpr::new(Immediate::Boolean(false)).into();
         }
 
         let cur_tok = self.peek().clone();
@@ -156,14 +156,14 @@ impl Parser {
         if let TokenType::Char(chr) = cur_tok.token_type {
             self.cur += 1;
 
-            return LiteralExpr::new(Value::Char(chr)).into();
+            return LiteralExpr::new(Immediate::Char(chr)).into();
         }
 
         if let TokenType::Number(num) = cur_tok.token_type {
             // we need to do this manually
             self.cur += 1;
 
-            return LiteralExpr::new(Value::Number(num)).into();
+            return LiteralExpr::new(Immediate::Number(num)).into();
         }
 
         if let TokenType::String(ref str_) = cur_tok.token_type {
@@ -215,7 +215,7 @@ impl Parser {
 
             self.cur -= 1; // exhaust all the dangling end of statements
 
-            return LiteralExpr::new(Value::Null).into();
+            return LiteralExpr::new(Immediate::Null).into();
         }
 
         if display_errors {
@@ -228,7 +228,7 @@ impl Parser {
         self.cur += 1;
         //self.try_sync();
 
-        LiteralExpr::new(Value::Null).into()
+        LiteralExpr::new(Immediate::Null).into()
     }
 
     //we need this display_errors thing to avoid a print in case of a bad attempt of parsing ( when

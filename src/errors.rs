@@ -4,7 +4,7 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
-use crate::{ast::structs::Value, lexer::Token};
+use crate::{lexer::Token, vm::Immediate};
 
 pub struct ErrorTuple(Box<dyn Error + Sync + Send + 'static>, Option<Token>);
 
@@ -21,9 +21,9 @@ impl ErrorHandler {
         &mut self,
         e: E,
         token: Option<Token>,
-    ) -> Value {
+    ) -> Immediate{
         self.list.push(ErrorTuple(Box::new(e), token));
-        Value::Null
+        Immediate::Null
     }
 
     pub fn report(&mut self) {
