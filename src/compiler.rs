@@ -1,9 +1,9 @@
-
 use crate::{ast::{Accept, CallExpr, ElseStmt, ExprVisitor, LiteralExpr, Statement, StmtVisitor}, lexer::TokenType, vm::{Immediate, OpCode}};
 pub struct Compiler{
     output: Vec<OpCode>,
     scope: usize
 }
+
 
 impl Compiler{
     pub fn new() -> Self{
@@ -30,13 +30,13 @@ impl StmtVisitor for Compiler{
         self.output.push(OpCode::Pop);
         Ok(())
     }
+
     //comp
     //jump_caso_falso
     //then
     //jump saida
     //else
     //saida
-
     fn visit_if_stmt(&mut self, expr: &crate::ast::IfStmt) -> Self::Output {
         expr.cond.accept(self)?;
 
@@ -111,6 +111,8 @@ impl StmtVisitor for Compiler{
         expr.init.accept(self)?;
 
         self.output.push(OpCode::SetLocal(name.to_string(), self.scope));
+        
+        self.output.push(OpCode::Pop);
 
         Ok(())
     }
@@ -141,7 +143,7 @@ impl ExprVisitor for Compiler{
         unimplemented!()
     }
     fn visit_call_expr(&mut self, expr: &crate::ast::CallExpr) -> Self::Output {
-        expr.arguments[0].accept(self)?;
+        expr.arguments[0].accept(self)?; // just for faster testing
 
         self.output.push(OpCode::TmpPrint);
 

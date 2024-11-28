@@ -331,7 +331,7 @@ impl VirtualMachine{
     }
 
     pub fn work(&mut self, instructions: &[OpCode]) -> VMResult<()>{
-        println!("{:?}", instructions);
+        self.ip = 0;
 
         let len = instructions.len();
 
@@ -377,7 +377,7 @@ impl VirtualMachine{
                 OpCode::GetLocal(name, scope) => {
                     let scope = *scope;
 
-                    if scope == self.scopes.len(){
+                    if scope > self.scopes.len(){
                         self.scopes.push(Scope::new());
                     }
 
@@ -395,6 +395,7 @@ impl VirtualMachine{
                     }
 
                     self.scopes[scope].insert(name.clone(), self.stack.pop().unwrap());
+
                 },
                 OpCode::JumpIfFalse(offset) => {
                     if let Some(Immediate::Boolean(cond)) = self.stack.last() {
