@@ -1,9 +1,9 @@
 use crate::{
-    ast::structs::{
-        ArrayExpr, ArrayGetExpr, ArraySetStmt, BinaryExpr, CallExpr, CastExpr, ControlFlowType, CtrlStmt, ElseStmt, Expression, FnStmt, ForStmt, GetExpr, GroupingExpr, IfStmt, IncludeStmt, LiteralExpr, SetStmt, Statement, StaticStmt, StructStmt, ThisExpr, UnaryExpr, Value, VarExpr, VarStmt, WhileStmt
+    ast::{
+        ArrayExpr, ArrayGetExpr, ArraySetStmt, BinaryExpr, CallExpr, CastExpr, ControlFlowType, CtrlStmt, ElseStmt, Expression, FnStmt, ForStmt, GetExpr, GroupingExpr, IfStmt, IncludeStmt, LiteralExpr, SetStmt, Statement, StaticStmt, StructStmt, ThisExpr, UnaryExpr, VarExpr, VarStmt, WhileStmt
     },
     errors,
-    lexer::{Token, TokenType},
+    lexer::{Token, TokenType}, vm::Immediate,
 };
 use thiserror::Error;
 
@@ -38,7 +38,6 @@ pub struct Parser {
     cur: usize,
     loop_count: usize,
     fn_count: usize,
-    struct_count: usize,
 }
 
 impl Parser {
@@ -50,7 +49,6 @@ impl Parser {
             cur: 0,
             loop_count: 0,
             fn_count: 0,
-            struct_count: 0,
         }
     }
 
@@ -60,10 +58,6 @@ impl Parser {
 
     pub fn in_fn(&self) -> bool {
         self.fn_count > 0
-    }
-
-    pub fn in_struct(&self) -> bool {
-        self.struct_count > 0
     }
 
     pub fn work(&mut self) -> Vec<Statement> {
@@ -140,15 +134,15 @@ impl Parser {
 
     pub fn get_primary(&mut self, display_errors: bool) -> Expression {
         if self.match_tokens(&[TokenType::Null]) {
-            return LiteralExpr::new(Value::Null).into();
+            return LiteralExpr::new(Immediate::Null).into();
         }
 
         if self.match_tokens(&[TokenType::True]) {
-            return LiteralExpr::new(Value::Boolean(true)).into();
+            return LiteralExpr::new(Immediate::Boolean(true)).into();
         }
 
         if self.match_tokens(&[TokenType::False]) {
-            return LiteralExpr::new(Value::Boolean(false)).into();
+            return LiteralExpr::new(Immediate::Boolean(false)).into();
         }
 
         let cur_tok = self.peek().clone();
@@ -156,14 +150,14 @@ impl Parser {
         if let TokenType::Char(chr) = cur_tok.token_type {
             self.cur += 1;
 
-            return LiteralExpr::new(Value::Char(chr)).into();
+            return LiteralExpr::new(Immediate::Char(chr)).into();
         }
 
         if let TokenType::Number(num) = cur_tok.token_type {
             // we need to do this manually
             self.cur += 1;
 
-            return LiteralExpr::new(Value::Number(num)).into();
+            return LiteralExpr::new(Immediate::Number(num)).into();
         }
 
         if let TokenType::String(ref str_) = cur_tok.token_type {
@@ -215,7 +209,7 @@ impl Parser {
 
             self.cur -= 1; // exhaust all the dangling end of statements
 
-            return LiteralExpr::new(Value::Null).into();
+            return LiteralExpr::new(Immediate::Null).into();
         }
 
         if display_errors {
@@ -228,7 +222,7 @@ impl Parser {
         self.cur += 1;
         //self.try_sync();
 
-        LiteralExpr::new(Value::Null).into()
+        LiteralExpr::new(Immediate::Null).into()
     }
 
     //we need this display_errors thing to avoid a print in case of a bad attempt of parsing ( when
@@ -725,11 +719,7 @@ impl Parser {
             self.get_function_declaration(name)
 
         } else if self.match_tokens(&[TokenType::LeftBrace]) {
-            self.struct_count += 1;
-
             let strct = self.get_struct_declaration(name);
-
-            self.struct_count -= 1;
 
             strct
         } else {

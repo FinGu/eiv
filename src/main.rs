@@ -4,17 +4,21 @@ use std::io;
 use std::io::BufRead;
 use std::io::Write;
 
+use vm::VirtualMachine;
+
 mod ast;
 mod errors;
 mod lexer;
 mod parser;
 mod utils;
-mod vars;
+//mod vars;
+mod compiler;
+mod vm;
 
 #[cfg(test)]
 mod tests;
 
-fn prompt_mode() {
+fn prompt_mode(vm: &mut VirtualMachine) {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
 
@@ -31,7 +35,7 @@ fn prompt_mode() {
 
                 s += "\n";
 
-                utils::run_interpreter(s, "<interpreter>".to_string()); // fuck it
+                utils::run_interpreter(vm, s, "<interpreter>".to_string()); // fuck it
             }
         }
 
@@ -41,10 +45,12 @@ fn prompt_mode() {
 }
 
 fn main() {
+    let mut vm = VirtualMachine::new();
+
     let args: Vec<_> = env::args().collect();
 
     if args.len() <= 1 {
-        prompt_mode();
+        prompt_mode(&mut vm);
         return;
     }
 
@@ -52,5 +58,5 @@ fn main() {
 
     let file = fs::read_to_string(name).expect("Failure to read the file");
 
-    utils::run_interpreter(file, name.to_string());
+    utils::run_interpreter(&mut vm, file, name.to_string());
 }

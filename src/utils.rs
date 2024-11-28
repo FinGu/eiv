@@ -1,6 +1,6 @@
-use crate::{ast::Interpreter, errors, lexer::Lexer, parser::Parser};
+use crate::{compiler::Compiler, errors, lexer::Lexer, parser::Parser, vm::{OpCode, VirtualMachine}};
 
-pub fn run_interpreter(_str: String, file_name: String) {
+pub fn run_interpreter(vm: &mut VirtualMachine, _str: String, file_name: String) {
     let mut scanner = Lexer::new(_str);
 
     let tokens = scanner.work();
@@ -13,9 +13,11 @@ pub fn run_interpreter(_str: String, file_name: String) {
     
     errors::LIST.lock().unwrap().report();
 
-    let interpreter = Interpreter::new();
+    let mut comp = Compiler::new(); 
 
-    interpreter.work(statements);
+    let mut result = comp.work(statements);
 
-    errors::LIST.lock().unwrap().report();
+    result.push(OpCode::Return);
+
+    let _ = vm.work(&result);
 }
