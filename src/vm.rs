@@ -211,8 +211,12 @@ pub enum OpCode{
     Less,
     LessEqual,
 
-    JumpIfFalse(usize),
-    Jump(usize),
+    BoolCast,
+    NumberCast,
+    CharCast,
+
+    JumpIfFalse(i32),
+    Jump(i32),
 
     SetLocal(String, usize),
     GetLocal(String, usize),
@@ -266,7 +270,7 @@ impl Scope{
 pub struct VirtualMachine{
     stack: Vec<Immediate>,
     scopes: Vec<Scope>,
-    ip: usize,
+    ip: i32,
 }
 
 impl VirtualMachine{
@@ -333,10 +337,12 @@ impl VirtualMachine{
     pub fn work(&mut self, instructions: &[OpCode]) -> VMResult<()>{
         self.ip = 0;
 
-        let len = instructions.len();
+        let len = instructions.len() as i32;
+
+        println!("{:?}", instructions);
 
         while self.ip < len{
-            let el = &instructions[self.ip];
+            let el = &instructions[self.ip as usize];
 
             match el{
                 OpCode::Pop => {
@@ -371,13 +377,28 @@ impl VirtualMachine{
                         Err(e) => return Err(e)
                     });
                 }
+                OpCode::NumberCast => {
+                    let popped = self.stack.pop().unwrap();
+
+                    self.stack.push(popped.cast_to_number());
+                },
+                OpCode::BoolCast => {
+                    let popped = self.stack.pop().unwrap();
+
+                    self.stack.push(popped.cast_to_bool());
+                },
+                OpCode::CharCast => {
+                    let popped = self.stack.pop().unwrap();
+
+                    self.stack.push(popped.cast_to_char());
+                },
                 OpCode::Constant(c) =>{
                     self.stack.push(c.clone());
                 },
                 OpCode::GetLocal(name, scope) => {
                     let scope = *scope;
 
-                    if scope > self.scopes.len(){
+                    if scope == self.scopes.len(){
                         self.scopes.push(Scope::new());
                     }
 
@@ -395,7 +416,6 @@ impl VirtualMachine{
                     }
 
                     self.scopes[scope].insert(name.clone(), self.stack.pop().unwrap());
-
                 },
                 OpCode::JumpIfFalse(offset) => {
                     if let Some(Immediate::Boolean(cond)) = self.stack.last() {

@@ -55,7 +55,7 @@ impl StmtVisitor for Compiler{
         self.output.push(OpCode::Pop);
 
         if let OpCode::JumpIfFalse(ref mut imm) = self.output[jump_if_false_pos]{
-            *imm = jump_after_pos - jump_if_false_pos + 1;
+            *imm = (jump_after_pos - jump_if_false_pos + 1) as i32;
         }
         
         if let Some(else_stmt) = &expr.or {
@@ -68,14 +68,10 @@ impl StmtVisitor for Compiler{
         let jump_after_else_pos = self.output.len();
 
         if let OpCode::Jump(ref mut imm) = self.output[jump_after_pos]{
-            *imm = jump_after_else_pos - jump_after_pos + 1;
+            *imm = (jump_after_else_pos - jump_after_pos + 1) as i32;
         }
 
         Ok(())
-    }
-
-    fn visit_for_stmt(&mut self, expr: &crate::ast::ForStmt) -> Self::Output {
-        unimplemented!()
     }
 
     fn visit_set_stmt(&mut self, expr: &crate::ast::SetStmt) -> Self::Output {
@@ -85,19 +81,65 @@ impl StmtVisitor for Compiler{
         unimplemented!()
     }
     fn visit_block_stmt(&mut self, expr: &crate::ast::BlockStmt) -> Self::Output {
-        self.scope += 1;
+        if expr.is_standalone{
+            self.scope += 1;
+        }
 
         for stmt in &expr.statements{
             stmt.accept(self)?;
         }
 
-        self.scope -= 1;
+        if expr.is_standalone{
+            self.scope -= 1;
+        }
 
         Ok(())
     }
+
     fn visit_while_stmt(&mut self, expr: &crate::ast::WhileStmt) -> Self::Output {
-        unimplemented!()
+        let before_cond_pos = self.output.len();
+
+        expr.cond.accept(self)?;
+
+        let jump_if_false_pos = self.output.len();
+
+        self.output.push(OpCode::JumpIfFalse(0));
+
+        self.output.push(OpCode::Pop);
+
+        expr.then.accept(self)?;
+
+        if let Some(incr) = &expr.incr_stmt{
+            incr.accept(self)?;
+        }
+
+        let after_jump = self.output.len();
+
+        self.output.push(OpCode::Jump(0));
+
+        self.output.push(OpCode::Pop);
+
+        if let OpCode::JumpIfFalse(ref mut imm) = self.output[jump_if_false_pos]{
+            *imm = (after_jump - jump_if_false_pos + 1) as i32;
+        }
+        
+        if let OpCode::Jump(ref mut imm) = self.output[after_jump] {
+            *imm = before_cond_pos as i32 - after_jump as i32 - 1;
+        }
+
+        Ok(())
     }
+
+    fn visit_for_stmt(&mut self, expr: &crate::ast::ForStmt) -> Self::Output {
+        if let Some(decl) = &expr.decl{
+            decl.accept(self)?;
+        }
+
+        expr.iwhile.accept(self)
+    }
+
+
+
     fn visit_struct_stmt(&mut self, expr: &crate::ast::StructStmt) -> Self::Output {
         unimplemented!()
     }
@@ -139,9 +181,19 @@ impl ExprVisitor for Compiler{
     fn visit_get_expr(&mut self, expr: &crate::ast::GetExpr) -> Self::Output {
         unimplemented!()
     }
+
     fn visit_cast_expr(&mut self, expr: &crate::ast::CastExpr) -> Self::Output {
-        unimplemented!()
+        expr.argument.accept(self)?;
+
+        self.output.push(match expr.op.token_type{
+            TokenType::BoolCast => OpCode::BoolCast,
+            TokenType::CharCast => OpCode::CharCast,
+            TokenType::NumberCast => OpCode::NumberCast,
+            _ => unreachable!()
+        });
+        Ok(())
     }
+
     fn visit_call_expr(&mut self, expr: &crate::ast::CallExpr) -> Self::Output {
         expr.arguments[0].accept(self)?; // just for faster testing
 

@@ -696,6 +696,17 @@ where
     }
 }
 
+impl<Visitor, T> Accept<Visitor> for CastExpr 
+where
+    Visitor: ExprVisitor<Output = T>,
+{
+    type Output = T;
+
+    fn accept(&self, visitor: &mut Visitor) -> Self::Output {
+        visitor.visit_cast_expr(self)
+    }
+}
+
 impl<Visitor, T> Accept<Visitor> for GroupingExpr 
 where
     Visitor: ExprVisitor<Output = T>,
@@ -775,6 +786,28 @@ where
     }
 }
 
+impl<Visitor, T> Accept<Visitor> for WhileStmt
+where
+    Visitor: StmtVisitor<Output = T>,
+{
+    type Output = T;
+
+    fn accept(&self, visitor: &mut Visitor) -> Self::Output {
+        visitor.visit_while_stmt(self)
+    }
+}
+
+impl<Visitor, T> Accept<Visitor> for ForStmt 
+where
+    Visitor: StmtVisitor<Output = T>,
+{
+    type Output = T;
+
+    fn accept(&self, visitor: &mut Visitor) -> Self::Output {
+        visitor.visit_for_stmt(self)
+    }
+}
+
 impl<Visitor, T> Accept<Visitor> for Expression
 where
     Visitor: ExprVisitor<Output = T>,
@@ -789,6 +822,7 @@ where
             Expression::Grouping(ref group) => group.accept(visitor),
             Expression::Variable(ref var) => var.accept(visitor),
             Expression::Call(ref call) => call.accept(visitor),
+            Expression::Cast(ref cast) => cast.accept(visitor),
             _ => unimplemented!()
         }
     }
@@ -806,6 +840,8 @@ where
             Statement::Variable(ref var) => var.accept(visitor),
             Statement::Block(ref block) => block.accept(visitor),
             Statement::If(ref ifstmt) => ifstmt.accept(visitor),
+            Statement::While(ref whil) => whil.accept(visitor),
+            Statement::For(ref _for) => _for.accept(visitor),
             _ => unimplemented!()
         }
     }
