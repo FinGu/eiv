@@ -282,13 +282,6 @@ impl Parser {
             args.push(self.get_expression(true));
 
             while self.match_tokens(&[TokenType::Comma]) {
-                if args.len() >= 255 {
-                    errors::LIST
-                        .lock()
-                        .unwrap()
-                        .push(ParserError::TooManyArgsFCall, Some(self.peek().clone()));
-                    break;
-                }
                 args.push(self.get_expression(true));
             }
         }

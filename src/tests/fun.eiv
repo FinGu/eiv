@@ -1,0 +1,14 @@
+basic = (n) {
+    a = 7
+    return a * 2;
+}
+
+/*fib = (n){
+    if n <= 1{
+        return n
+    }
+
+    return fib(n-1) + fib(n-2);
+}*/
+
+println(basic(5));

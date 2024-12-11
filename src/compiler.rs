@@ -1,24 +1,156 @@
-use crate::{ast::{Accept, CallExpr, ElseStmt, ExprVisitor, LiteralExpr, Statement, StmtVisitor}, lexer::TokenType, vm::{Immediate, OpCode}};
-pub struct Compiler{
-    output: Vec<OpCode>,
-    scope: usize
+use crate::{ast::{Accept, ControlFlowType, ElseStmt, ExprVisitor, LiteralExpr, Statement, StmtVisitor}, lexer::TokenType, vm::{ Immediate, OpCode}};
+
+#[derive(Clone, Debug)]
+pub struct Function{
+    pub name: String,
+    pub arity: usize,
+    pub code: Vec<OpCode>,
 }
 
-
-impl Compiler{
+impl Function{
     pub fn new() -> Self{
         Self{
-            output: Vec::new(),
-            scope: 0,
+            name: String::new(),
+            arity: 0,
+            code: Vec::new()
         }
     }
 
-    pub fn work(&mut self, statements: Vec<Statement>) -> Vec<OpCode>{
-        for stmt in &statements{
-            let _ = stmt.accept(self);
+    pub fn get_next(&self, cur: i32) -> OpCode{
+        self.code[(cur+1) as usize].clone()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Local{
+    id: String,
+    scope: usize,
+}
+//a = 5
+//println(a)
+//Constant(5) SetLocal(0) GetLocal(0) GetGobal("println") Call
+//a = 5
+//{
+//a = 7
+//}
+//
+//a = 5
+//b = 6
+//{ 
+//a = 7
+//}
+
+//a, b, a
+#[derive(Clone, Debug)]
+pub struct SymbolTable {
+    symbols: Vec<Local>,
+    depth: usize,
+}
+
+impl SymbolTable {
+    pub fn new() -> Self {
+        Self {
+            symbols: vec![],
+            depth: 0,
+        }
+    }
+    
+    pub fn enter_scope(&mut self) {
+        self.depth += 1;
+    }
+
+    pub fn leave_scope(&mut self) -> usize{
+        let amnt_to_pop = self.symbols.iter().filter(|el| el.scope >= self.depth).count();
+
+        self.symbols.retain(|el| el.scope < self.depth);
+
+        self.depth -= 1;
+
+        amnt_to_pop
+    }
+
+    pub fn resolve(&self, name: &str) -> Option<usize> {
+        let len = self.symbols.len();
+
+        for (i, var) in self.symbols.iter().rev().enumerate() { //inner to outer
+            if var.scope == self.depth && var.id == name{
+                return Some(len - i - 1); 
+            } 
         }
 
-        self.output.clone()
+        None
+    }
+
+    //Local{ a, 0 }
+    //
+
+    pub fn mark(&mut self, name: String) -> usize {
+        let mut out = if !self.symbols.is_empty(){
+            self.symbols.len()-1 
+        } else{
+            0
+        };
+
+        let mut should_push = true;
+
+        for (i, var) in self.symbols.iter().rev().enumerate(){
+            if var.id != name{
+                continue;
+            }
+
+            if self.depth <= var.scope{
+                should_push = false;
+            } 
+
+            out = i;
+        }
+
+        if should_push{
+            self.symbols.push(Local{
+                id: name,
+                scope: self.depth
+            });
+
+            out = self.symbols.len()-1;
+        }
+
+        out
+    }
+}
+
+pub struct Compiler{
+    cur_func: Function,
+
+    pub symbol_table: SymbolTable,
+}
+
+impl Compiler{
+    pub fn new(symbol_table: SymbolTable) -> Self{
+        Self{
+            cur_func: Function::new(),
+            symbol_table, 
+        }
+    }
+
+    pub fn push_return(&mut self){
+        let stack = self.get_cur_stack();
+
+        stack.push(OpCode::Nop);
+        stack.push(OpCode::Return);
+    }
+
+    pub fn work(&mut self, statements: Vec<Statement>) -> CompilerResult<Function>{
+        for stmt in &statements{
+            stmt.accept(self)?;
+        }
+
+        self.push_return();
+
+        Ok(self.cur_func.clone())
+    }
+
+    pub fn get_cur_stack(&mut self) -> &mut Vec<OpCode>{
+        &mut self.cur_func.code
     }
 }
 
@@ -26,8 +158,16 @@ impl StmtVisitor for Compiler{
     type Output = CompilerResult<()>;
 
     fn visit_expression_stmt(&mut self, expr: &crate::ast::ExprStmt) -> Self::Output {
-        expr.expression.accept(self)?;
-        self.output.push(OpCode::Pop);
+        let our_expr = &expr.expression;
+
+        if our_expr.is_call(){
+            return our_expr.accept(self);
+        }
+
+        our_expr.accept(self)?;
+
+        self.get_cur_stack().push(OpCode::Pop);
+
         Ok(())
     }
 
@@ -40,21 +180,21 @@ impl StmtVisitor for Compiler{
     fn visit_if_stmt(&mut self, expr: &crate::ast::IfStmt) -> Self::Output {
         expr.cond.accept(self)?;
 
-        let jump_if_false_pos = self.output.len();
+        let jump_if_false_pos = self.get_cur_stack().len();
 
-        self.output.push(OpCode::JumpIfFalse(0));
+        self.get_cur_stack().push(OpCode::JumpIfFalse(0));
 
-        self.output.push(OpCode::Pop);
+        self.get_cur_stack().push(OpCode::Pop);
 
         expr.then.accept(self)?;
 
-        let jump_after_pos = self.output.len();
+        let jump_after_pos = self.get_cur_stack().len();
 
-        self.output.push(OpCode::Jump(0));
+        self.get_cur_stack().push(OpCode::Jump(0));
 
-        self.output.push(OpCode::Pop);
+        self.get_cur_stack().push(OpCode::Pop);
 
-        if let OpCode::JumpIfFalse(ref mut imm) = self.output[jump_if_false_pos]{
+        if let OpCode::JumpIfFalse(ref mut imm) = self.get_cur_stack()[jump_if_false_pos]{
             *imm = (jump_after_pos - jump_if_false_pos + 1) as i32;
         }
         
@@ -65,9 +205,9 @@ impl StmtVisitor for Compiler{
             }
         }
 
-        let jump_after_else_pos = self.output.len();
+        let jump_after_else_pos = self.get_cur_stack().len();
 
-        if let OpCode::Jump(ref mut imm) = self.output[jump_after_pos]{
+        if let OpCode::Jump(ref mut imm) = self.get_cur_stack()[jump_after_pos]{
             *imm = (jump_after_else_pos - jump_after_pos + 1) as i32;
         }
 
@@ -78,11 +218,19 @@ impl StmtVisitor for Compiler{
         unimplemented!()
     }
     fn visit_ctrl_stmt(&mut self, expr: &crate::ast::CtrlStmt) -> Self::Output {
-        unimplemented!()
+        match &expr.ctrl{
+            ControlFlowType::Return(ret) => {
+                ret.accept(self)?;
+                self.push_return();
+            },
+            _ => unimplemented!()
+        }
+
+        Ok(())
     }
     fn visit_block_stmt(&mut self, expr: &crate::ast::BlockStmt) -> Self::Output {
         if expr.is_standalone{
-            self.scope += 1;
+            self.symbol_table.enter_scope();
         }
 
         for stmt in &expr.statements{
@@ -90,22 +238,32 @@ impl StmtVisitor for Compiler{
         }
 
         if expr.is_standalone{
-            self.scope -= 1;
+            let amnt = self.symbol_table.leave_scope();
+            for _ in 0..amnt{
+                self.get_cur_stack().push(OpCode::Pop);
+            } 
         }
 
         Ok(())
     }
 
+    //cond
+    //j_nao_bater saida
+    //then
+    //incremento
+    //jmp acima_cond
+    //saida
+
     fn visit_while_stmt(&mut self, expr: &crate::ast::WhileStmt) -> Self::Output {
-        let before_cond_pos = self.output.len();
+        let before_cond_pos = self.get_cur_stack().len();
 
         expr.cond.accept(self)?;
 
-        let jump_if_false_pos = self.output.len();
+        let jump_if_false_pos = self.get_cur_stack().len();
 
-        self.output.push(OpCode::JumpIfFalse(0));
+        self.get_cur_stack().push(OpCode::JumpIfFalse(0));
 
-        self.output.push(OpCode::Pop);
+        self.get_cur_stack().push(OpCode::Pop);
 
         expr.then.accept(self)?;
 
@@ -113,17 +271,17 @@ impl StmtVisitor for Compiler{
             incr.accept(self)?;
         }
 
-        let after_jump = self.output.len();
+        let after_jump = self.get_cur_stack().len();
 
-        self.output.push(OpCode::Jump(0));
+        self.get_cur_stack().push(OpCode::Jump(0));
 
-        self.output.push(OpCode::Pop);
+        self.get_cur_stack().push(OpCode::Pop);
 
-        if let OpCode::JumpIfFalse(ref mut imm) = self.output[jump_if_false_pos]{
+        if let OpCode::JumpIfFalse(ref mut imm) = self.get_cur_stack()[jump_if_false_pos]{
             *imm = (after_jump - jump_if_false_pos + 1) as i32;
         }
         
-        if let OpCode::Jump(ref mut imm) = self.output[after_jump] {
+        if let OpCode::Jump(ref mut imm) = self.get_cur_stack()[after_jump] {
             *imm = before_cond_pos as i32 - after_jump as i32 - 1;
         }
 
@@ -139,7 +297,6 @@ impl StmtVisitor for Compiler{
     }
 
 
-
     fn visit_struct_stmt(&mut self, expr: &crate::ast::StructStmt) -> Self::Output {
         unimplemented!()
     }
@@ -152,16 +309,38 @@ impl StmtVisitor for Compiler{
 
         expr.init.accept(self)?;
 
-        self.output.push(OpCode::SetLocal(name.to_string(), self.scope));
-        
-        self.output.push(OpCode::Pop);
+        let pos = self.symbol_table.mark(name.clone());
+
+        self.get_cur_stack().push(OpCode::SetLocal(pos as i32));
 
         Ok(())
     }
 
     fn visit_function_stmt(&mut self, expr: &crate::ast::FnStmt) -> Self::Output {
-        unimplemented!()
+        let name = expr.name.token_type.as_identifier().unwrap();
+
+        let params = &expr.params;
+
+        let mut new_sym_table = SymbolTable::new();
+
+        for param in params{
+            new_sym_table.mark(param.clone());
+        }
+
+        let mut new_compiler = Compiler::new(new_sym_table);
+
+        let mut compiled_result = new_compiler.work(expr.body.clone())?;
+        compiled_result.arity = params.len();
+
+        let local = self.symbol_table.mark(name.clone());
+
+        self.get_cur_stack().push(OpCode::Constant(Immediate::Function(compiled_result)));
+
+        self.get_cur_stack().push(OpCode::StartFn(local as i32));
+
+        Ok(())
     }
+
     fn visit_array_set_stmt(&mut self, expr: &crate::ast::ArraySetStmt) -> Self::Output {
         unimplemented!()
     }
@@ -173,7 +352,7 @@ impl ExprVisitor for Compiler{
     fn visit_literal_expr(&mut self, expr: &LiteralExpr) -> Self::Output {
         let data = &expr.value;
 
-        self.output.push(OpCode::Constant(data.clone()));
+        self.get_cur_stack().push(OpCode::Constant(data.clone()));
 
         Ok(())
     }
@@ -185,7 +364,7 @@ impl ExprVisitor for Compiler{
     fn visit_cast_expr(&mut self, expr: &crate::ast::CastExpr) -> Self::Output {
         expr.argument.accept(self)?;
 
-        self.output.push(match expr.op.token_type{
+        self.get_cur_stack().push(match expr.op.token_type{
             TokenType::BoolCast => OpCode::BoolCast,
             TokenType::CharCast => OpCode::CharCast,
             TokenType::NumberCast => OpCode::NumberCast,
@@ -195,12 +374,21 @@ impl ExprVisitor for Compiler{
     }
 
     fn visit_call_expr(&mut self, expr: &crate::ast::CallExpr) -> Self::Output {
-        expr.arguments[0].accept(self)?; // just for faster testing
+        let mut arg_amount = 0;
 
-        self.output.push(OpCode::TmpPrint);
+        for arg in &expr.arguments{
+            arg.accept(self)?;
+
+            arg_amount += 1;
+        }
+
+        expr.callee.accept(self)?;
+
+        self.get_cur_stack().push(OpCode::Call(arg_amount));
 
         Ok(())
     }
+
     fn visit_this_expr(&mut self, expr: &crate::ast::ThisExpr) -> Self::Output {
         unimplemented!()
     }
@@ -210,7 +398,7 @@ impl ExprVisitor for Compiler{
     fn visit_unary_expr(&mut self, expr: &crate::ast::UnaryExpr) -> Self::Output {
         expr.right.accept(self)?;
 
-        self.output.push(match expr.op.token_type{
+        self.get_cur_stack().push(match expr.op.token_type{
             TokenType::Minus => OpCode::Negate,
             TokenType::Not => OpCode::Not,
             _ => unreachable!()
@@ -222,7 +410,7 @@ impl ExprVisitor for Compiler{
         expr.left.accept(self)?;
         expr.right.accept(self)?;
 
-        self.output.push(match expr.op.token_type{
+        self.get_cur_stack().push(match expr.op.token_type{
             TokenType::Plus => OpCode::Add,
             TokenType::Minus => OpCode::Subtract,
             TokenType::Star => OpCode::Multiply,
@@ -249,9 +437,17 @@ impl ExprVisitor for Compiler{
     fn visit_variable_expr(&mut self, expr: &crate::ast::VarExpr) -> Self::Output {
         let name = expr.name.token_type.as_identifier().unwrap().clone();
 
-        self.output.push(OpCode::GetLocal(name, self.scope));
+        let local = self.symbol_table.resolve(&name);
+
+        if let Some(resolved) = local{
+            self.get_cur_stack().push(OpCode::GetLocal(resolved as i32));
+            return Ok(());
+        }
+
+        self.get_cur_stack().push(OpCode::GetGlobal(name));
 
         Ok(())
+        //Err(CompilerError::UnresolvedSymbol)
     }
 
     fn visit_array_get_expr(&mut self, expr: &crate::ast::ArrayGetExpr) -> Self::Output {
@@ -261,7 +457,9 @@ impl ExprVisitor for Compiler{
 #[derive(thiserror::Error, Debug)]
 pub enum CompilerError{
     #[error("Generic error")]
-    Generic
+    Generic,
+    #[error("Unresolved symbol")]
+    UnresolvedSymbol,
 }
 
 pub type CompilerResult<T> = Result<T, CompilerError>;

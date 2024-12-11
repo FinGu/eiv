@@ -808,6 +808,28 @@ where
     }
 }
 
+impl<Visitor, T> Accept<Visitor> for FnStmt
+where
+    Visitor: StmtVisitor<Output = T>,
+{
+    type Output = T;
+
+    fn accept(&self, visitor: &mut Visitor) -> Self::Output {
+        visitor.visit_function_stmt(self)
+    }
+}
+
+impl<Visitor, T> Accept<Visitor> for CtrlStmt
+where
+    Visitor: StmtVisitor<Output = T>,
+{
+    type Output = T;
+
+    fn accept(&self, visitor: &mut Visitor) -> Self::Output {
+        visitor.visit_ctrl_stmt(self)
+    }
+}
+
 impl<Visitor, T> Accept<Visitor> for Expression
 where
     Visitor: ExprVisitor<Output = T>,
@@ -842,6 +864,8 @@ where
             Statement::If(ref ifstmt) => ifstmt.accept(visitor),
             Statement::While(ref whil) => whil.accept(visitor),
             Statement::For(ref _for) => _for.accept(visitor),
+            Statement::Function(ref fun) => fun.accept(visitor),
+            Statement::ControlFlow(ref cflow) => cflow.accept(visitor),
             _ => unimplemented!()
         }
     }

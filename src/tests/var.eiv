@@ -1,0 +1,10 @@
+a = 5;
+{
+    a = 6;
+    {
+        a = 7;
+        println(a);
+    }
+    println(a);
+}
+println(a);

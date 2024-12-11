@@ -1,6 +1,77 @@
-use std::{cmp::Ordering, collections::HashMap, ops::{Add, Div, Mul, Sub}};
+use std::{cell::RefCell, cmp::Ordering, collections::HashMap, ops::{Add, Div, Mul, Sub}, rc::Rc};
+use std::fmt::{Debug, Display};
 
 use enum_as_inner::EnumAsInner;
+
+use crate::compiler::Function;
+
+pub trait Callable: Sync + Send {
+    fn arity(&self) -> usize;
+
+    fn clone_box(&self) -> Box<dyn Callable>;
+
+    fn call(&self, vm: &mut VirtualMachine, params: usize) -> VMResult<Immediate>;
+
+    fn name(&self) -> String;
+}
+
+impl Debug for dyn Callable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Callable").finish()
+    }
+}
+
+impl Clone for Box<dyn Callable> {
+    fn clone(&self) -> Box<dyn Callable> {
+        self.clone_box()
+    }
+}
+
+#[derive(Debug)]
+pub struct CallFrame{
+    base: i32,
+
+    ip: i32
+}
+
+impl Callable for Function{
+    fn arity(&self) -> usize {
+        self.arity
+
+    }
+
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    fn clone_box(&self) -> Box<dyn Callable> {
+       Box::new(self.clone()) 
+    }
+
+    fn call(&self, vm: &mut VirtualMachine, params_len: usize) -> VMResult<Immediate> {
+        if self.arity() != params_len{
+            return Err(VirtualMachineError::BadArity);
+        }
+
+        let new_frame = CallFrame::new(0, (vm.stack.len() - params_len) as i32);
+
+        vm.call_frames.push(new_frame);
+
+        vm.work(self)?;
+
+        Ok(Immediate::Null)
+    }
+}
+
+impl CallFrame{
+    pub fn new(ip: i32, base: i32) -> Self{
+        Self{
+            ip, 
+            base 
+        }
+    }
+}
+
 
 #[derive(Clone, Debug, EnumAsInner)]
 pub enum Immediate{
@@ -8,7 +79,23 @@ pub enum Immediate{
     Char(u8),
     Boolean(bool),
     Array(Vec<Immediate>),
+    Function(Function),
+    GlobalFunction(Box<dyn Callable>),
     Null,
+}
+
+impl Display for Immediate{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self{
+            Self::Number(num) => write!(f, "{}", num),
+            Self::Char(chr) => write!(f, "{}", chr),
+            Self::Null => write!(f, "null"),
+            _ => {
+                unimplemented!()
+            }
+        }
+        
+    }
 }
 
 impl From<f64> for Immediate{
@@ -63,6 +150,7 @@ impl PartialOrd for Immediate {
             (_, Self::Char(_)) => Some(std::cmp::Ordering::Greater),
             (Self::Boolean(_), _) => Some(std::cmp::Ordering::Less),
             (_, Self::Boolean(_)) => Some(std::cmp::Ordering::Greater),
+            _ => None
         }
     }
 }
@@ -192,7 +280,7 @@ impl Immediate{
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, EnumAsInner)]
 pub enum OpCode{
     Pop,
     Return,
@@ -218,79 +306,54 @@ pub enum OpCode{
     JumpIfFalse(i32),
     Jump(i32),
 
-    SetLocal(String, usize),
-    GetLocal(String, usize),
+    SetLocal(i32),
+    GetLocal(i32),
+    GetGlobal(String),
 
-    TmpPrint,
-    Constant(Immediate)
+    StartFn(i32),
+
+    Call(i32),
+
+    Constant(Immediate),
+
+    Nop
 }
 
-#[derive(Debug)]
-pub struct Scope{
-    data: HashMap<String, Immediate>    
-}
-
-impl Scope{
-    pub fn new() -> Self {
-        Scope {
-            data: HashMap::new(),
-        }
-    }
-
-    pub fn insert(&mut self, key: String, value: Immediate) {
-        self.data.insert(key, value);
-    }
-
-    pub fn get(&self, key: &str) -> Option<&Immediate> {
-        self.data.get(key)
-    }
-
-    pub fn contains_key(&self, key: &str) -> bool {
-        self.data.contains_key(key)
-    }
-
-    pub fn remove(&mut self, key: &str) -> Option<Immediate> {
-        self.data.remove(key)
-    }
-
-    pub fn len(&self) -> usize {
-        self.data.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
-    }
-
-    pub fn clear(&mut self) {
-        self.data.clear();
-    }
-}
-
-//scopes[0] = globals
 pub struct VirtualMachine{
-    stack: Vec<Immediate>,
-    scopes: Vec<Scope>,
-    ip: i32,
+    pub globals: HashMap<String, Immediate>,
+    pub call_frames: Vec<CallFrame>,
+    pub stack: Vec<Immediate>,
 }
 
 impl VirtualMachine{
     pub fn new() -> Self{
         Self{
-            ip: 0,
             stack: Vec::new(),
-            scopes: vec![Scope::new()],
+            call_frames: vec![CallFrame::new(0, 0)],
+            globals: HashMap::new()
         }
     }
 
-    /*fn get_local(&self, name: &str, scope: usize) -> VMResult<Immediate> {
-        self.scopes.get(scope);
+    fn get_local(&mut self, pos: i32) -> VMResult<Immediate> {
+        let frame = self.call_frames.last().unwrap();
 
-        if let Some(map) = self.scopes.get(scope){
+        let stack_index = frame.base + pos;
 
+        Ok(self.stack.get(stack_index as usize).cloned()
+            .unwrap_or(Immediate::Null))
+    }
+
+    fn set_local(&mut self, pos: i32, data: Immediate) {
+        let frame = self.call_frames.last().unwrap();
+
+        let stack_index = (frame.base + pos) as usize;
+
+        if stack_index < self.stack.len() {
+            self.stack[stack_index] = data;
+        } else {
+            self.stack.push(data);
         }
-
-        Ok(Immediate::Null)
-    }*/
+    }
 
     fn binary_op(&mut self, kind: &OpCode) -> VMResult<Immediate>{ 
         let right = self.stack.pop().unwrap();
@@ -334,22 +397,58 @@ impl VirtualMachine{
             })
     }
 
-    pub fn work(&mut self, instructions: &[OpCode]) -> VMResult<()>{
-        self.ip = 0;
+    fn get_cur_call_frame(&self) -> &CallFrame{
+        self.call_frames.last().unwrap()
+    }
+
+    fn set_ip(&mut self, new: i32){
+        let target = self.call_frames.len() - 1;
+
+        self.call_frames[target].ip = new;
+    }
+
+    fn get_ip(&self) -> i32{
+        self.get_cur_call_frame().ip
+    }
+
+    fn inc_ip(&mut self, inc: i32) {
+        let target = self.call_frames.len() - 1;
+
+        self.call_frames[target].ip += inc;
+    }
+
+    pub fn work(&mut self, function: &Function) -> VMResult<()>{
+        let instructions = &function.code;
+
+        self.set_ip(0);
 
         let len = instructions.len() as i32;
 
-        println!("{:?}", instructions);
+        //println!("{:?}", instructions);
 
-        while self.ip < len{
-            let el = &instructions[self.ip as usize];
+        while self.get_ip() < len{
+            let el = &instructions[self.get_ip() as usize];
 
             match el{
                 OpCode::Pop => {
                     self.stack.pop();
                 },
                 OpCode::Return =>{
-                    self.stack.pop();
+                    let popped_return = self.stack.pop();
+
+                    self.call_frames.pop();
+
+                    if self.call_frames.is_empty(){
+                        self.stack.pop();
+
+                        return Ok(());
+                    }
+
+                    if let Some(ret) = popped_return{
+                        self.stack.push(ret);
+                    }
+
+                    return Ok(());
                 },
                 OpCode::Not => {
                     let popped = self.stack.pop().unwrap();
@@ -395,45 +494,55 @@ impl VirtualMachine{
                 OpCode::Constant(c) =>{
                     self.stack.push(c.clone());
                 },
-                OpCode::GetLocal(name, scope) => {
-                    let scope = *scope;
+                OpCode::GetLocal(pos) => {
+                    let local = self.get_local(*pos)?;
 
-                    if scope == self.scopes.len(){
-                        self.scopes.push(Scope::new());
-                    }
-
-                    let data = self.scopes[scope].get(name)
-                        .cloned()
-                        .unwrap_or(Immediate::Null);
-
-                    self.stack.push(data);
+                    self.stack.push(local);
                 },
-                OpCode::SetLocal(name, scope) =>{
-                    let scope = *scope;
+                OpCode::SetLocal(pos) =>{
+                    let popped = self.stack.pop().unwrap();
 
-                    if scope == self.scopes.len(){
-                        self.scopes.push(Scope::new());
-                    }
-
-                    self.scopes[scope].insert(name.clone(), self.stack.pop().unwrap());
+                    self.set_local(*pos, popped.clone());
                 },
+                OpCode::GetGlobal(name) => {
+                    let global = self.globals.get(name).cloned().unwrap_or(Immediate::Null);
+
+                    self.stack.push(global);
+                }
                 OpCode::JumpIfFalse(offset) => {
                     if let Some(Immediate::Boolean(cond)) = self.stack.last() {
                         if !cond{
-                            self.ip += *offset;
+                            self.inc_ip(*offset);
                         }
                     }
                 },
                 OpCode::Jump(offset) => {
-                    self.ip += *offset;
+                    self.inc_ip(*offset);
                 },
-                OpCode::TmpPrint => {
-                    println!("{:?}", self.stack.pop());
-                }
+                OpCode::Call(params_num) => {
+                    let params_num = *params_num as usize;
+                    let popped = self.stack.pop().unwrap();
+
+                    match popped{
+                        Immediate::Function(func) => {
+                            func.call(self, params_num)?;
+                        },
+                        Immediate::GlobalFunction(func) => {
+                            func.call(self, params_num)?;
+                        },
+                        _ => return Err(VirtualMachineError::FuncDoesntExist)
+
+                    };
+                },
+                OpCode::StartFn(name) => {
+                    let popped = self.stack.pop().unwrap();
+
+                    self.set_local(*name, popped);
+                },
+                OpCode::Nop => {}
                 _ => unimplemented!()
             } 
-            self.ip += 1;
-
+            self.inc_ip(1);
         }
 
         Ok(())
@@ -446,6 +555,10 @@ pub enum VirtualMachineError{
     Generic,
     #[error("Invalid input for a binary op")]
     InvalidInpBinaryOp,
+    #[error("Invalid number of parameters")]
+    BadArity,
+    #[error("Function doesn't exist")]
+    FuncDoesntExist,
 }
 
 pub type VMResult<T> = Result<T, VirtualMachineError>;
