@@ -45,7 +45,6 @@ pub struct Local{
 //a, b, a
 #[derive(Clone, Debug)]
 pub struct SymbolTable {
-    globals: indexmap::IndexSet<String>,
     symbols: Vec<Local>,
     depth: usize,
 }
@@ -53,7 +52,6 @@ pub struct SymbolTable {
 impl SymbolTable {
     pub fn new() -> Self {
         Self {
-            globals: IndexSet::new(),
             symbols: vec![],
             depth: 0,
         }
@@ -126,8 +124,6 @@ pub struct Compiler{
     cur_func: Function,
 
     pub symbol_table: SymbolTable,
-
-    in_func: bool
 }
 
 impl Compiler{
@@ -135,7 +131,6 @@ impl Compiler{
         Self{
             cur_func: Function::new(),
             symbol_table, 
-            in_func: false
         }
     }
 
@@ -224,6 +219,7 @@ impl StmtVisitor for Compiler{
     fn visit_set_stmt(&mut self, expr: &crate::ast::SetStmt) -> Self::Output {
         unimplemented!()
     }
+
     fn visit_ctrl_stmt(&mut self, expr: &crate::ast::CtrlStmt) -> Self::Output {
         match &expr.ctrl{
             ControlFlowType::Return(ret) => {
@@ -342,11 +338,9 @@ impl StmtVisitor for Compiler{
         let mut compiled_result = new_compiler.work(expr.body.clone())?;
         compiled_result.arity = params.len();
 
-        let local = self.symbol_table.mark(name.clone());
-
         self.get_cur_stack().push(OpCode::Constant(Immediate::Function(compiled_result.into())));
 
-        self.get_cur_stack().push(OpCode::SetLocal(local as i32));
+        self.get_cur_stack().push(OpCode::SetGlobal(name.to_string()));
 
         Ok(())
     }

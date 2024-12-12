@@ -1,3 +1,7 @@
 for i = 10; i >= 0; i -= 1{
     println(i)
 }
+
+for i = 0; i < 10; i += 1{
+    println(i)
+}
