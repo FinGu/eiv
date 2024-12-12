@@ -1,4 +1,4 @@
-use crate::{compiler::{Compiler, SymbolTable}, errors, lexer::Lexer, parser::Parser, vm::{OpCode, VirtualMachine}};
+use crate::{compiler::{Compiler, SymbolTable}, errors, lexer::Lexer, parser::Parser, vm::{OpCode, VirtualMachine, VirtualMachineError}};
 
 pub fn run_interpreter(symbol_table: SymbolTable, vm: &mut VirtualMachine, _str: String, file_name: String) -> SymbolTable {
     let mut scanner = Lexer::new(_str);
@@ -17,7 +17,11 @@ pub fn run_interpreter(symbol_table: SymbolTable, vm: &mut VirtualMachine, _str:
 
     let result = comp.work(statements).unwrap();
 
-    vm.work(&result).unwrap();
+    match vm.work(result.into()){
+        Ok(_) => {},
+        Err(e) => panic!("{}", e),
+        
+    }
 
     comp.symbol_table
 }

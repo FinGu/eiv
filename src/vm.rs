@@ -1,4 +1,4 @@
-use std::{cell::RefCell, cmp::Ordering, collections::HashMap, ops::{Add, Div, Mul, Sub}, rc::Rc};
+use std::{cell::{Cell, RefCell}, cmp::Ordering, collections::HashMap, ops::{Add, Div, Mul, Sub}, rc::Rc};
 use std::fmt::{Debug, Display};
 
 use enum_as_inner::EnumAsInner;
@@ -29,49 +29,22 @@ impl Clone for Box<dyn Callable> {
 
 #[derive(Debug)]
 pub struct CallFrame{
+    function: Rc<Function>,
+
     base: i32,
 
-    ip: i32
-}
-
-impl Callable for Function{
-    fn arity(&self) -> usize {
-        self.arity
-
-    }
-
-    fn name(&self) -> String {
-        self.name.clone()
-    }
-
-    fn clone_box(&self) -> Box<dyn Callable> {
-       Box::new(self.clone()) 
-    }
-
-    fn call(&self, vm: &mut VirtualMachine, params_len: usize) -> VMResult<Immediate> {
-        if self.arity() != params_len{
-            return Err(VirtualMachineError::BadArity);
-        }
-
-        let new_frame = CallFrame::new(0, (vm.stack.len() - params_len) as i32);
-
-        vm.call_frames.push(new_frame);
-
-        vm.work(self)?;
-
-        Ok(Immediate::Null)
-    }
+    ip: i32,
 }
 
 impl CallFrame{
-    pub fn new(ip: i32, base: i32) -> Self{
+    pub fn new(function: Rc<Function>, ip: i32, base: i32) -> Self{
         Self{
+            function,
             ip, 
-            base 
+            base,
         }
     }
 }
-
 
 #[derive(Clone, Debug, EnumAsInner)]
 pub enum Immediate{
@@ -79,7 +52,7 @@ pub enum Immediate{
     Char(u8),
     Boolean(bool),
     Array(Vec<Immediate>),
-    Function(Function),
+    Function(Rc<Function>),
     GlobalFunction(Box<dyn Callable>),
     Null,
 }
@@ -122,7 +95,7 @@ impl From<Vec<Immediate>> for Immediate{
     }
 }
 
-impl PartialOrd for Immediate {
+impl PartialOrd for Immediate { 
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match (self, other) {
             (Self::Null, Self::Null) => Some(std::cmp::Ordering::Equal),
@@ -179,7 +152,9 @@ impl Add for Immediate{
                 arr.push(r);
                 arr
             }),
-            _ => Self::Number(f64::NAN) 
+            _ => Self::Number({
+                f64::NAN
+            }) 
         }
     }
 }
@@ -190,7 +165,9 @@ impl Sub for Immediate{
     fn sub(self, rhs: Self) -> Self::Output {
         match (self, rhs){
             (Self::Number(l), Self::Number(r)) => Self::Number(l - r),
-            _ => Self::Number(f64::NAN)
+            _ => Self::Number({
+                f64::NAN
+            })
         }
     }
 }
@@ -201,7 +178,10 @@ impl Div for Immediate{
     fn div(self, rhs: Self) -> Self::Output {
         match (self, rhs){
             (Self::Number(l), Self::Number(r)) => Self::Number(l / r),
-            _ => Self::Number(f64::NAN)
+            _ => Self::Number({
+
+                f64::NAN
+            })
         }    
     }
 }
@@ -218,7 +198,9 @@ impl Mul for Immediate{
                 //maybe later
                 unimplemented!()
             }),
-            _ => Self::Number(f64::NAN)
+            _ => Self::Number({
+                f64::NAN
+            })
 
         }
     }
@@ -307,10 +289,11 @@ pub enum OpCode{
     Jump(i32),
 
     SetLocal(i32),
+    SetLocalPop(i32),
     GetLocal(i32),
-    GetGlobal(String),
 
-    StartFn(i32),
+    GetGlobal(String),
+    SetGlobal(String),
 
     Call(i32),
 
@@ -329,7 +312,7 @@ impl VirtualMachine{
     pub fn new() -> Self{
         Self{
             stack: Vec::new(),
-            call_frames: vec![CallFrame::new(0, 0)],
+            call_frames: Vec::new(),
             globals: HashMap::new()
         }
     }
@@ -340,7 +323,9 @@ impl VirtualMachine{
         let stack_index = frame.base + pos;
 
         Ok(self.stack.get(stack_index as usize).cloned()
-            .unwrap_or(Immediate::Null))
+            .unwrap_or({
+                Immediate::Null
+            }))
     }
 
     fn set_local(&mut self, pos: i32, data: Immediate) {
@@ -378,16 +363,16 @@ impl VirtualMachine{
                 },
                 OpCode::NotEqual => {
                     (left != right).into()
-                }
+                },
                 OpCode::Less => {
                     (left < right).into()
-                }
+                },
                 OpCode::LessEqual =>{
                     (left <= right).into()
                 },
                 OpCode::Greater => {
                     (left > right).into()
-                }
+                },
                 OpCode::GreaterEqual => {
                     (left >= right).into()
                 },
@@ -395,6 +380,14 @@ impl VirtualMachine{
                     return Err(VirtualMachineError::InvalidInpBinaryOp);
                 }
             })
+    }
+    
+    fn get_cur_code(&self) -> &Vec<OpCode>{
+        &self.get_cur_function().code
+    }
+
+    fn get_cur_function(&self) -> &Function{
+        &self.get_cur_call_frame().function
     }
 
     fn get_cur_call_frame(&self) -> &CallFrame{
@@ -417,17 +410,19 @@ impl VirtualMachine{
         self.call_frames[target].ip += inc;
     }
 
-    pub fn work(&mut self, function: &Function) -> VMResult<()>{
-        let instructions = &function.code;
+    pub fn work(&mut self, function: Rc<Function>) -> VMResult<()>{
+        self.call_frames.push(
+            CallFrame::new(function.clone(), 0, 0)
+        );
 
-        self.set_ip(0);
+        self.stack.push(Immediate::Function(function.clone()));
 
-        let len = instructions.len() as i32;
+        //println!("{:?}", self.get_cur_code());
 
-        //println!("{:?}", instructions);
+        while self.get_ip() < self.get_cur_code().len() as i32 {
+            let el = self.get_cur_code()[self.get_ip() as usize].clone();
 
-        while self.get_ip() < len{
-            let el = &instructions[self.get_ip() as usize];
+            //println!("IP: {}, Executing: {:?} with last stack value: {:?}", self.get_ip(), el, self.stack.last());
 
             match el{
                 OpCode::Pop => {
@@ -435,6 +430,8 @@ impl VirtualMachine{
                 },
                 OpCode::Return =>{
                     let popped_return = self.stack.pop();
+                                        
+                    self.stack.truncate(self.get_cur_call_frame().base as usize);
 
                     self.call_frames.pop();
 
@@ -443,12 +440,10 @@ impl VirtualMachine{
 
                         return Ok(());
                     }
-
+                    
                     if let Some(ret) = popped_return{
                         self.stack.push(ret);
                     }
-
-                    return Ok(());
                 },
                 OpCode::Not => {
                     let popped = self.stack.pop().unwrap();
@@ -469,7 +464,7 @@ impl VirtualMachine{
                 OpCode::Add | OpCode::Subtract | OpCode::Multiply | OpCode::Divide | 
                 OpCode::Equal | OpCode::NotEqual | OpCode::Less | OpCode::LessEqual | OpCode::Greater | OpCode::GreaterEqual
                     =>{
-                    let result = self.binary_op(el);
+                    let result = self.binary_op(&el);
 
                     self.stack.push(match result{
                         Ok(ok) => ok,
@@ -495,49 +490,65 @@ impl VirtualMachine{
                     self.stack.push(c.clone());
                 },
                 OpCode::GetLocal(pos) => {
-                    let local = self.get_local(*pos)?;
+                    let local = self.get_local(pos)?;
 
                     self.stack.push(local);
                 },
                 OpCode::SetLocal(pos) =>{
-                    let popped = self.stack.pop().unwrap();
+                    let last = self.stack.last().unwrap();
 
-                    self.set_local(*pos, popped.clone());
+                    self.set_local(pos, last.clone());
+                },
+                OpCode::SetLocalPop(pos) => {
+                    let last = self.stack.pop().unwrap();
+
+                    self.set_local(pos, last);
                 },
                 OpCode::GetGlobal(name) => {
-                    let global = self.globals.get(name).cloned().unwrap_or(Immediate::Null);
+                    let global = self.globals.get(&name).cloned().unwrap_or(Immediate::Null);
 
                     self.stack.push(global);
+                },
+                OpCode::SetGlobal(name) => {
+                    let last = self.stack.pop().unwrap();
+
+                    self.globals.insert(name, last);
                 }
                 OpCode::JumpIfFalse(offset) => {
                     if let Some(Immediate::Boolean(cond)) = self.stack.last() {
                         if !cond{
-                            self.inc_ip(*offset);
+                            self.inc_ip(offset);
+                            continue;
                         }
                     }
                 },
                 OpCode::Jump(offset) => {
-                    self.inc_ip(*offset);
+                    self.inc_ip(offset);
+                    continue;
                 },
                 OpCode::Call(params_num) => {
-                    let params_num = *params_num as usize;
-                    let popped = self.stack.pop().unwrap();
+                    let params_num = params_num as usize;
 
-                    match popped{
-                        Immediate::Function(func) => {
-                            func.call(self, params_num)?;
-                        },
-                        Immediate::GlobalFunction(func) => {
-                            func.call(self, params_num)?;
-                        },
-                        _ => return Err(VirtualMachineError::FuncDoesntExist)
+                    let base = self.stack.len() - params_num - 1;
 
-                    };
-                },
-                OpCode::StartFn(name) => {
-                    let popped = self.stack.pop().unwrap();
+                    let func = &self.stack[base];
 
-                    self.set_local(*name, popped);
+                    if func.is_function(){
+                        let as_func = func.as_function().unwrap();
+                        
+                        let new_frame = CallFrame::new(Rc::clone(as_func), 0, 
+                            base as i32);
+
+                        self.call_frames.push(new_frame);
+
+                        continue;
+                    }
+                    else if func.is_global_function(){
+                        let as_gfunc = func.as_global_function().unwrap().clone();
+                        as_gfunc.call(self, params_num)?;
+                    } else{
+                        return Err(VirtualMachineError::FuncDoesntExist);
+                    }
                 },
                 OpCode::Nop => {}
                 _ => unimplemented!()

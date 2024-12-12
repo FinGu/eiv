@@ -1,0 +1,2 @@
+fun = (n){if n == 0{return 10;}return fun(n-1);}
+println(fun(2));

@@ -1,0 +1,2 @@
+abc = (n){if n > 5{println(n);} else{println("no");}}
+abc(1);

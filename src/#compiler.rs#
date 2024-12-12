@@ -1,4 +1,4 @@
-use indexmap::IndexSet;
+khjuse indexmap::IndexSet;
 
 use crate::{ast::{Accept, ControlFlowType, ElseStmt, ExprVisitor, LiteralExpr, Statement, StmtVisitor}, lexer::TokenType, vm::{ Immediate, OpCode}};
 
@@ -235,7 +235,6 @@ impl StmtVisitor for Compiler{
 
         Ok(())
     }
-
     fn visit_block_stmt(&mut self, expr: &crate::ast::BlockStmt) -> Self::Output {
         if expr.is_standalone{
             self.symbol_table.enter_scope();
