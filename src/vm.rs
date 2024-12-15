@@ -1,31 +1,9 @@
-use std::{cell::{Cell, RefCell}, cmp::Ordering, collections::HashMap, ops::{Add, Div, Mul, Sub}, rc::Rc};
+use std::{collections::HashMap, ops::{Add, Div, Mul, Sub}, rc::Rc};
 use std::fmt::{Debug, Display};
 
 use enum_as_inner::EnumAsInner;
 
-use crate::compiler::Function;
-
-pub trait Callable: Sync + Send {
-    fn arity(&self) -> usize;
-
-    fn clone_box(&self) -> Box<dyn Callable>;
-
-    fn call(&self, vm: &mut VirtualMachine, params: usize) -> VMResult<Immediate>;
-
-    fn name(&self) -> String;
-}
-
-impl Debug for dyn Callable {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Callable").finish()
-    }
-}
-
-impl Clone for Box<dyn Callable> {
-    fn clone(&self) -> Box<dyn Callable> {
-        self.clone_box()
-    }
-}
+use crate::{compiler::Function, prelude::Callable};
 
 #[derive(Debug)]
 pub struct CallFrame{
@@ -323,9 +301,7 @@ impl VirtualMachine{
         let stack_index = frame.base + pos;
 
         Ok(self.stack.get(stack_index as usize).cloned()
-            .unwrap_or({
-                Immediate::Null
-            }))
+            .unwrap_or(Immediate::Null))
     }
 
     fn set_local(&mut self, pos: i32, data: Immediate) {
@@ -380,6 +356,36 @@ impl VirtualMachine{
                     return Err(VirtualMachineError::InvalidInpBinaryOp);
                 }
             })
+    }
+
+    fn call_function(&mut self, params_num: usize) -> VMResult<()>{
+        let base = self.stack.len() - params_num - 1;
+
+        let func = &self.stack[base];
+
+        match func{
+            Immediate::Function(normal_func) => {
+                if normal_func.arity != params_num{
+                    return Err(VirtualMachineError::WrongNumParams);
+
+                }
+
+                let new_frame = CallFrame::new(Rc::clone(normal_func), 0, 
+                            base as i32);
+
+                self.call_frames.push(new_frame);
+            },
+            Immediate::GlobalFunction(global_func) => {
+                global_func.clone().call(self, params_num)?;
+
+                self.inc_ip(1); //global funcs won't do this for us
+            }
+            _ => {
+                return Err(VirtualMachineError::FuncDoesntExist);
+            }
+        }
+
+        Ok(())
     }
     
     fn get_cur_code(&self) -> &Vec<OpCode>{
@@ -527,28 +533,8 @@ impl VirtualMachine{
                     continue;
                 },
                 OpCode::Call(params_num) => {
-                    let params_num = params_num as usize;
-
-                    let base = self.stack.len() - params_num - 1;
-
-                    let func = &self.stack[base];
-
-                    if func.is_function(){
-                        let as_func = func.as_function().unwrap();
-                        
-                        let new_frame = CallFrame::new(Rc::clone(as_func), 0, 
-                            base as i32);
-
-                        self.call_frames.push(new_frame);
-
-                        continue;
-                    }
-                    else if func.is_global_function(){
-                        let as_gfunc = func.as_global_function().unwrap().clone();
-                        as_gfunc.call(self, params_num)?;
-                    } else{
-                        return Err(VirtualMachineError::FuncDoesntExist);
-                    }
+                    self.call_function(params_num as usize)?;
+                    continue;
                 },
                 OpCode::Nop => {}
                 _ => unimplemented!()
@@ -570,6 +556,8 @@ pub enum VirtualMachineError{
     BadArity,
     #[error("Function doesn't exist")]
     FuncDoesntExist,
+    #[error("Wrong num of parameters to a func")]
+    WrongNumParams
 }
 
 pub type VMResult<T> = Result<T, VirtualMachineError>;

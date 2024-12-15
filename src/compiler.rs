@@ -95,7 +95,7 @@ impl SymbolTable {
 
         let mut should_push = true;
 
-        for (i, var) in self.symbols.iter().rev().enumerate(){
+        for (i, var) in self.symbols.iter().enumerate(){
             if var.id != name{
                 continue;
             }
@@ -338,9 +338,11 @@ impl StmtVisitor for Compiler{
         let mut compiled_result = new_compiler.work(expr.body.clone())?;
         compiled_result.arity = params.len();
 
+        let local = self.symbol_table.mark(name.clone());
+
         self.get_cur_stack().push(OpCode::Constant(Immediate::Function(compiled_result.into())));
 
-        self.get_cur_stack().push(OpCode::SetGlobal(name.to_string()));
+        self.get_cur_stack().push(OpCode::SetLocal(local as i32));
 
         Ok(())
     }

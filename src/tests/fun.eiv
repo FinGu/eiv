@@ -1,2 +1,17 @@
-fib = (n){if n <= 1{return n;}return fib(n-1) + fib(n-2);}
-println(fib(15));
+a = 5;
+
+fun = (){
+    a = 10
+
+    println(a)
+
+    closure = (a){
+        println(a)
+    }
+
+    return closure
+}
+
+fun()(1337)
+
+closure(2311)
