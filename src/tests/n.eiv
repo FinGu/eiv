@@ -1,3 +1,9 @@
-while true{
-    print('.')
+closure = (){
+    c = (){
+        return 'a';
+    }
+
+    return c
 }
+
+println(closure()())

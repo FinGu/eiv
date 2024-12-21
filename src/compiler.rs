@@ -1,4 +1,4 @@
-use indexmap::IndexSet;
+use indexmap::map::Keys;
 
 use crate::{ast::{Accept, ControlFlowType, ElseStmt, ExprVisitor, LiteralExpr, Statement, StmtVisitor}, lexer::TokenType, vm::{ Immediate, OpCode}};
 
@@ -120,10 +120,65 @@ impl SymbolTable {
     }
 }
 
+enum LoopStmtType{
+    Continue,
+    Break
+}
+
+#[derive(Default)]
+struct Loop{
+    continuee: i32,
+    breakk: i32,
+    opcodes: Vec<(usize, LoopStmtType)> 
+        // the position of the Continue and Break opcodes
+}
+
+#[derive(Default)]
+pub struct LoopContext{
+    stmts: Vec<Loop>,
+}
+
+impl LoopContext{
+    pub fn push_ctx(&mut self){
+        self.stmts.push(Loop::default());
+    }
+
+    pub fn pop_ctx(&mut self) -> Loop{
+        self.stmts.pop().unwrap()
+    }
+
+    pub fn push_pos_to_current(&mut self, pos: usize, kind: LoopStmtType) {
+        let last_i = self.stmts.len() - 1;
+
+        let last = &mut self.stmts[last_i];
+    
+        last.opcodes.push((pos, kind));
+    }
+
+    pub fn set_continue_pos(&mut self, pos: usize){
+        let last_i = self.stmts.len() - 1;
+
+        let last = &mut self.stmts[last_i];
+    
+        last.continuee = pos as i32;
+    }
+
+    pub fn set_break_pos(&mut self, pos: usize){
+        let last_i = self.stmts.len() - 1;
+
+        let last = &mut self.stmts[last_i];
+    
+        last.breakk = pos as i32;
+    }
+
+}
+
 pub struct Compiler{
     cur_func: Function,
 
     pub symbol_table: SymbolTable,
+
+    loop_ctx: LoopContext,
 }
 
 impl Compiler{
@@ -131,7 +186,16 @@ impl Compiler{
         Self{
             cur_func: Function::new(),
             symbol_table, 
+            loop_ctx: LoopContext::default(),
         }
+    }
+
+    pub fn push_cflow(&mut self, kind: LoopStmtType){
+        let location = self.get_cur_stack().len();
+
+        self.loop_ctx.push_pos_to_current(location, kind);
+
+        self.get_cur_stack().push(OpCode::Jump(0));
     }
 
     pub fn push_return(&mut self){
@@ -226,6 +290,12 @@ impl StmtVisitor for Compiler{
                 ret.accept(self)?;
                 self.push_return();
             },
+            ControlFlowType::Break => {
+                self.push_cflow(LoopStmtType::Break);
+            },
+            ControlFlowType::Continue => {
+                self.push_cflow(LoopStmtType::Continue);
+            }
             _ => unimplemented!()
         }
 
@@ -259,6 +329,8 @@ impl StmtVisitor for Compiler{
     //saida
 
     fn visit_while_stmt(&mut self, expr: &crate::ast::WhileStmt) -> Self::Output {
+        self.loop_ctx.push_ctx();
+
         let before_cond_pos = self.get_cur_stack().len();
 
         expr.cond.accept(self)?;
@@ -271,11 +343,17 @@ impl StmtVisitor for Compiler{
 
         expr.then.accept(self)?;
 
+        let continue_pos = self.get_cur_stack().len();
+
+        self.loop_ctx.set_continue_pos(continue_pos);
+
         if let Some(incr) = &expr.incr_stmt{
             incr.accept(self)?;
         }
 
         let after_jump = self.get_cur_stack().len();
+
+        self.loop_ctx.set_break_pos(after_jump+1);
 
         self.get_cur_stack().push(OpCode::Jump(0));
 
@@ -287,6 +365,17 @@ impl StmtVisitor for Compiler{
         
         if let OpCode::Jump(ref mut imm) = self.get_cur_stack()[after_jump] {
             *imm = before_cond_pos as i32 - after_jump as i32;
+        }
+
+        let loop_data = self.loop_ctx.pop_ctx();
+
+        for (pos, kind) in loop_data.opcodes{
+            if let OpCode::Jump(ref mut imm) = self.get_cur_stack()[pos]{
+                *imm = match kind{
+                    LoopStmtType::Continue => loop_data.continuee - pos as i32,
+                    LoopStmtType::Break => loop_data.breakk - pos as i32
+                }
+            }
         }
 
         Ok(())
@@ -427,6 +516,8 @@ impl ExprVisitor for Compiler{
             TokenType::GreaterEqual => OpCode::GreaterEqual,
             TokenType::Less => OpCode::Less,
             TokenType::LessEqual => OpCode::LessEqual,
+            TokenType::Or => OpCode::Or,
+            TokenType::And => OpCode::And,
             _ => {
                 unreachable!()
             }
@@ -453,7 +544,6 @@ impl ExprVisitor for Compiler{
         self.get_cur_stack().push(OpCode::GetGlobal(name));
 
         Ok(())
-        //Err(CompilerError::UnresolvedSymbol)
     }
 
     fn visit_array_get_expr(&mut self, expr: &crate::ast::ArrayGetExpr) -> Self::Output {

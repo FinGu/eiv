@@ -259,15 +259,20 @@ pub enum OpCode{
     Less,
     LessEqual,
 
+    And,
+    Or,
+
     BoolCast,
     NumberCast,
     CharCast,
 
     JumpIfFalse(i32),
+
     Jump(i32),
+    Break(i32),
+    Continue(i32),
 
     SetLocal(i32),
-    SetLocalPop(i32),
     GetLocal(i32),
 
     GetGlobal(String),
@@ -352,6 +357,19 @@ impl VirtualMachine{
                 OpCode::GreaterEqual => {
                     (left >= right).into()
                 },
+                OpCode::Or => {
+                    match (left, right) {
+                        (Immediate::Boolean(l), Immediate::Boolean(r)) => Immediate::Boolean(l || r),
+                        _ => return Err(VirtualMachineError::InvalidInpBinaryOp),
+                    }
+                },
+                OpCode::And => {
+                    match (left, right) {
+                        (Immediate::Boolean(l), Immediate::Boolean(r)) => Immediate::Boolean(l && r),
+                        _ => return Err(VirtualMachineError::InvalidInpBinaryOp),
+                    }
+
+                }
                 _ => {
                     return Err(VirtualMachineError::InvalidInpBinaryOp);
                 }
@@ -468,7 +486,7 @@ impl VirtualMachine{
                     })
                 },
                 OpCode::Add | OpCode::Subtract | OpCode::Multiply | OpCode::Divide | 
-                OpCode::Equal | OpCode::NotEqual | OpCode::Less | OpCode::LessEqual | OpCode::Greater | OpCode::GreaterEqual
+                OpCode::Equal | OpCode::NotEqual | OpCode::Less | OpCode::LessEqual | OpCode::Greater | OpCode::GreaterEqual | OpCode::And | OpCode::Or
                     =>{
                     let result = self.binary_op(&el);
 
@@ -505,11 +523,6 @@ impl VirtualMachine{
 
                     self.set_local(pos, last.clone());
                 },
-                OpCode::SetLocalPop(pos) => {
-                    let last = self.stack.pop().unwrap();
-
-                    self.set_local(pos, last);
-                },
                 OpCode::GetGlobal(name) => {
                     let global = self.globals.get(&name).cloned().unwrap_or(Immediate::Null);
 
@@ -528,7 +541,7 @@ impl VirtualMachine{
                         }
                     }
                 },
-                OpCode::Jump(offset) => {
+                OpCode::Jump(offset) | OpCode::Continue(offset) | OpCode::Break(offset) => {
                     self.inc_ip(offset);
                     continue;
                 },
