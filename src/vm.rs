@@ -269,8 +269,6 @@ pub enum OpCode{
     JumpIfFalse(i32),
 
     Jump(i32),
-    Break(i32),
-    Continue(i32),
 
     SetLocal(i32),
     GetLocal(i32),
@@ -541,7 +539,7 @@ impl VirtualMachine{
                         }
                     }
                 },
-                OpCode::Jump(offset) | OpCode::Continue(offset) | OpCode::Break(offset) => {
+                OpCode::Jump(offset) => {
                     self.inc_ip(offset);
                     continue;
                 },
