@@ -1,23 +1,42 @@
+use std::{collections::HashMap, rc::Rc};
+
 use indexmap::map::Keys;
 
-use crate::{ast::{Accept, ControlFlowType, ElseStmt, ExprVisitor, LiteralExpr, Statement, StmtVisitor}, lexer::TokenType, vm::{ Immediate, OpCode}};
+use crate::{ast::{Accept, ControlFlowType, ElseStmt, ExprVisitor, FnStmt, LiteralExpr, Statement, StmtVisitor}, lexer::TokenType, vm::{ Immediate, OpCode}};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Function{
     pub name: String,
     pub arity: usize,
     pub code: Vec<OpCode>,
 }
 
-impl Function{
-    pub fn new() -> Self{
-        Self{
-            name: String::new(),
-            arity: 0,
-            code: Vec::new()
-        }
-    }
+#[derive(Clone, Debug, Default)]
+pub struct StructDef{
+    pub name: String,
+    pub fields: HashMap<String, Immediate>,
+    pub methods: HashMap<String, Function>
 
+}
+
+#[derive(Clone, Debug)]
+pub struct StructInst{
+    pub from: Rc<StructDef>,
+    pub fields: HashMap<String, Immediate>,
+    pub methods: HashMap<String, Function>
+}
+
+impl StructInst{
+    pub fn new(from: Rc<StructDef>) -> Self{
+        Self{
+            from,
+            fields: HashMap::new(),
+            methods: HashMap::new(),
+        } 
+    }
+}
+
+impl Function{
     pub fn get_next(&self, cur: i32) -> OpCode{
         self.code[(cur+1) as usize].clone()
     }
@@ -184,7 +203,7 @@ pub struct Compiler{
 impl Compiler{
     pub fn new(symbol_table: SymbolTable) -> Self{
         Self{
-            cur_func: Function::new(),
+            cur_func: Function::default(),
             symbol_table, 
             loop_ctx: LoopContext::default(),
         }
@@ -281,7 +300,22 @@ impl StmtVisitor for Compiler{
     }
 
     fn visit_set_stmt(&mut self, expr: &crate::ast::SetStmt) -> Self::Output {
-        unimplemented!()
+        expr.callee.accept(self)?;
+
+        expr.rvalue.accept(self)?;
+
+        let name = expr.name.token_type.as_identifier().unwrap().clone();
+
+        self.get_cur_stack().push(OpCode::SetProp(name, Box::new(match expr.op.token_type{
+            TokenType::PlusEqual => OpCode::Add,
+            TokenType::StarEqual => OpCode::Multiply,
+            TokenType::MinusEqual => OpCode::Subtract,
+            TokenType::SlashEqual => OpCode::Divide,
+            //TokenType::PercentageEqual => OpCode::Modulus
+            _ => OpCode::Equal
+        })));
+
+        Ok(())
     }
 
     fn visit_ctrl_stmt(&mut self, expr: &crate::ast::CtrlStmt) -> Self::Output {
@@ -391,7 +425,17 @@ impl StmtVisitor for Compiler{
 
 
     fn visit_struct_stmt(&mut self, expr: &crate::ast::StructStmt) -> Self::Output {
-        unimplemented!()
+        let name = expr.name.token_type.as_identifier().unwrap();
+
+        let methods = &expr.methods;
+
+        let local = self.symbol_table.mark(name.clone());
+
+        self.get_cur_stack().push(OpCode::Constant(Immediate::StructDef(StructDef::default().into())));
+
+        self.get_cur_stack().push(OpCode::SetLocal(local as i32));
+
+        Ok(())
     }
     fn visit_include_stmt(&mut self, expr: &crate::ast::IncludeStmt) -> Self::Output {
         unimplemented!()
@@ -426,6 +470,7 @@ impl StmtVisitor for Compiler{
 
         let mut compiled_result = new_compiler.work(expr.body.clone())?;
         compiled_result.arity = params.len();
+        compiled_result.name = name.clone();
 
         let local = self.symbol_table.mark(name.clone());
 
@@ -453,7 +498,13 @@ impl ExprVisitor for Compiler{
     }
 
     fn visit_get_expr(&mut self, expr: &crate::ast::GetExpr) -> Self::Output {
-        unimplemented!()
+        expr.callee.accept(self)?;
+
+        let name = expr.argument.token_type.as_identifier().unwrap().clone();
+
+        self.get_cur_stack().push(OpCode::GetProp(name));
+
+        Ok(())
     }
 
     fn visit_cast_expr(&mut self, expr: &crate::ast::CastExpr) -> Self::Output {

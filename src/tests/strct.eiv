@@ -1,0 +1,11 @@
+main = {
+    constructor = (){
+        println('a');
+    }
+}
+
+a = main()
+a.b = 5
+a.c = 10
+
+println(a.b + a.c)

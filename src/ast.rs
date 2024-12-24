@@ -707,6 +707,18 @@ where
     }
 }
 
+impl<Visitor, T> Accept<Visitor> for GetExpr 
+where
+    Visitor: ExprVisitor<Output = T>,
+{
+    type Output = T;
+
+    fn accept(&self, visitor: &mut Visitor) -> Self::Output {
+        visitor.visit_get_expr(self)
+    }
+}
+
+
 impl<Visitor, T> Accept<Visitor> for GroupingExpr 
 where
     Visitor: ExprVisitor<Output = T>,
@@ -830,6 +842,28 @@ where
     }
 }
 
+impl<Visitor, T> Accept<Visitor> for StructStmt
+where
+    Visitor: StmtVisitor<Output = T>,
+{
+    type Output = T;
+
+    fn accept(&self, visitor: &mut Visitor) -> Self::Output {
+        visitor.visit_struct_stmt(self)
+    }
+}
+
+impl<Visitor, T> Accept<Visitor> for SetStmt 
+where
+    Visitor: StmtVisitor<Output = T>,
+{
+    type Output = T;
+
+    fn accept(&self, visitor: &mut Visitor) -> Self::Output {
+        visitor.visit_set_stmt(self)
+    }
+}
+
 impl<Visitor, T> Accept<Visitor> for Expression
 where
     Visitor: ExprVisitor<Output = T>,
@@ -845,6 +879,7 @@ where
             Expression::Variable(ref var) => var.accept(visitor),
             Expression::Call(ref call) => call.accept(visitor),
             Expression::Cast(ref cast) => cast.accept(visitor),
+            Expression::Get(ref get) => get.accept(visitor),
             _ => unimplemented!()
         }
     }
@@ -866,6 +901,8 @@ where
             Statement::For(ref _for) => _for.accept(visitor),
             Statement::Function(ref fun) => fun.accept(visitor),
             Statement::ControlFlow(ref cflow) => cflow.accept(visitor),
+            Statement::Struct(ref strct) => strct.accept(visitor),
+            Statement::Set(ref set) => set.accept(visitor),
             _ => unimplemented!()
         }
     }

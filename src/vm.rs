@@ -1,9 +1,9 @@
-use std::{collections::HashMap, ops::{Add, Div, Mul, Sub}, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, ops::{Add, Div, Mul, Sub}, rc::Rc};
 use std::fmt::{Debug, Display};
 
 use enum_as_inner::EnumAsInner;
 
-use crate::{compiler::Function, prelude::Callable};
+use crate::{compiler::{Function, StructDef, StructInst}, prelude::Callable};
 
 #[derive(Debug)]
 pub struct CallFrame{
@@ -32,6 +32,8 @@ pub enum Immediate{
     Array(Vec<Immediate>),
     Function(Rc<Function>),
     GlobalFunction(Box<dyn Callable>),
+    StructDef(Rc<StructDef>),
+    StructInst(Rc<RefCell<StructInst>>),
     Null,
 }
 
@@ -276,6 +278,9 @@ pub enum OpCode{
     GetGlobal(String),
     SetGlobal(String),
 
+    GetProp(String),
+    SetProp(String, Box<OpCode>),
+
     Call(i32),
 
     Constant(Immediate),
@@ -385,7 +390,7 @@ impl VirtualMachine{
                     return Err(VirtualMachineError::WrongNumParams);
 
                 }
-
+             
                 let new_frame = CallFrame::new(Rc::clone(normal_func), 0, 
                             base as i32);
 
@@ -395,7 +400,15 @@ impl VirtualMachine{
                 global_func.clone().call(self, params_num)?;
 
                 self.inc_ip(1); //global funcs won't do this for us
-            }
+            },
+            Immediate::StructDef(sdef) => {
+                let new_inst = StructInst::new(sdef.clone());
+
+                self.stack[base] = Immediate::StructInst(RefCell::new(new_inst).into());
+            },
+            Immediate::StructInst(inst) =>{
+                self.inc_ip(1);
+            },
             _ => {
                 return Err(VirtualMachineError::FuncDoesntExist);
             }
@@ -439,7 +452,7 @@ impl VirtualMachine{
 
         self.stack.push(Immediate::Function(function.clone()));
 
-        //println!("{:?}", self.get_cur_code());
+        println!("{:?}", self.get_cur_code());
 
         while self.get_ip() < self.get_cur_code().len() as i32 {
             let el = self.get_cur_code()[self.get_ip() as usize].clone();
@@ -530,7 +543,49 @@ impl VirtualMachine{
                     let last = self.stack.pop().unwrap();
 
                     self.globals.insert(name, last);
-                }
+                },
+                OpCode::GetProp(name) => {
+                    let last = self.stack.pop().unwrap();
+
+                    match last{
+                        Immediate::StructInst(ref sinst) => {
+                            let field = sinst.borrow().fields.get(&name).cloned().unwrap_or(Immediate::Null);
+
+                            self.stack.push(field);
+                        },
+                        _ => return Err(VirtualMachineError::GetNotInstance)
+                    }
+                },
+                OpCode::SetProp(name, op) => {
+                    let rvalue = self.stack.pop().unwrap();
+                    let mut inst = self.stack.pop().unwrap();
+
+                    match inst{
+                        Immediate::StructInst(ref mut sinst) => {
+                            let old_value = sinst.borrow().fields.get(&name)
+                                        .cloned()
+                                        .unwrap_or(Immediate::Null);
+
+                            sinst.borrow_mut().fields.insert(name.clone(), match *op {
+                                OpCode::Add => {
+                                    old_value + rvalue
+                                },
+                                OpCode::Multiply => {
+                                    old_value * rvalue
+                                },
+                                OpCode::Divide => {
+                                    old_value / rvalue
+                                },
+                                OpCode::Subtract => {
+                                    old_value - rvalue
+                                }
+                                _ => rvalue,
+                            });
+
+                        },
+                        _ => return Err(VirtualMachineError::GetNotInstance)
+                    }
+                },
                 OpCode::JumpIfFalse(offset) => {
                     if let Some(Immediate::Boolean(cond)) = self.stack.last() {
                         if !cond{
@@ -568,7 +623,9 @@ pub enum VirtualMachineError{
     #[error("Function doesn't exist")]
     FuncDoesntExist,
     #[error("Wrong num of parameters to a func")]
-    WrongNumParams
+    WrongNumParams,
+    #[error("Get operation used on something that's not an instance")]
+    GetNotInstance,
 }
 
 pub type VMResult<T> = Result<T, VirtualMachineError>;
