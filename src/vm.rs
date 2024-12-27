@@ -32,7 +32,7 @@ pub enum Immediate{
     Array(Vec<Immediate>),
     Function(Rc<Function>),
     GlobalFunction(Box<dyn Callable>),
-    StructDef(Rc<StructDef>),
+    StructDef(Rc<RefCell<StructDef>>),
     StructInst(Rc<RefCell<StructInst>>),
     Null,
 }
@@ -274,6 +274,8 @@ pub enum OpCode{
 
     SetLocal(i32),
     GetLocal(i32),
+
+    SetStructVar(String),
 
     GetGlobal(String),
     SetGlobal(String),
@@ -549,12 +551,7 @@ impl VirtualMachine{
 
                     match last{
                         Immediate::StructInst(ref sinst) => {
-                            let field = sinst.borrow().get_compiled_var(&name);
-
-                            let data = match field{
-                                None => sinst.borrow().dyn_data.get(&name).cloned().unwrap_or(Immediate::Null),
-                                Some(field) => self.get_local(field)?
-                            };
+                            let data = sinst.borrow().dyn_data.get(&name).cloned().unwrap_or(Immediate::Null);
 
                             self.stack.push(data);
                         },
@@ -563,20 +560,16 @@ impl VirtualMachine{
                 },
                 OpCode::SetProp(name, op) => {
                     let rvalue = self.stack.pop().unwrap();
-                    let mut inst = self.stack.pop().unwrap();
+                    let inst = self.stack.pop().unwrap();
 
                     match inst{
-                        Immediate::StructInst(ref mut sinst) => {
-                            let old_pos = sinst.borrow().get_compiled_var(&name);
+                        Immediate::StructInst(sinst) => {
+                            let old_data = sinst.as_ref().borrow_mut().dyn_data.get(&name).cloned();
 
-                            match old_pos{
-                                None => {
-                                    sinst.as_ref().borrow_mut().dyn_data.insert(name, rvalue);
-                                },
-                                Some(pos) => {
-                                    let old_value = self.get_local(pos)?;
-
-                                    self.set_local(pos, match *op{
+                            sinst.as_ref().borrow_mut().dyn_data.insert(name, match old_data{
+                                None => rvalue,
+                                Some(old_value) => {
+                                    match *op{
                                         OpCode::Add => {
                                             old_value + rvalue
                                         },
@@ -590,15 +583,25 @@ impl VirtualMachine{
                                             old_value - rvalue
                                         },
                                         _ => rvalue
-                                    });
 
-                                } 
-                            }
-
+                                    }
+                                }
+                            });
                         },
                         _ => return Err(VirtualMachineError::GetNotInstance)
                     }
                 },
+                OpCode::SetStructVar(name) =>{
+                    let to_set = self.stack.pop().unwrap();
+                    let sstruct = self.stack.last().unwrap();
+
+                    match sstruct{
+                        Immediate::StructDef(sdef) => {
+                            sdef.as_ref().borrow_mut().vars.insert(name, to_set.clone());
+                        },
+                        _ => return Err(VirtualMachineError::BadStructuredStruct)
+                    }
+                }
                 OpCode::JumpIfFalse(offset) => {
                     if let Some(Immediate::Boolean(cond)) = self.stack.last() {
                         if !cond{
@@ -639,6 +642,8 @@ pub enum VirtualMachineError{
     WrongNumParams,
     #[error("Get operation used on something that's not an instance")]
     GetNotInstance,
+    #[error("Badly structured struct")]
+    BadStructuredStruct,
 }
 
 pub type VMResult<T> = Result<T, VirtualMachineError>;

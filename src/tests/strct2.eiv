@@ -1,0 +1,14 @@
+struct = {
+    abc = (d){
+        println(5 + d)
+    };
+
+    dfg = 5;
+
+}
+
+instance = struct()
+
+var = instance.abc
+
+var(2)

@@ -5,8 +5,8 @@ main = {
 
     cuh = 5
 
-    fn2 = (){
-        println('b');
+    fn2 = (ok){
+        println(ok);
     }
 }
 
@@ -18,6 +18,6 @@ println(a.b + a.c)
 
 a.constructor()
 
-a.fn2()
+a.fn2('c')
 
 println(a.cuh)

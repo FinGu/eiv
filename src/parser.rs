@@ -744,7 +744,11 @@ impl Parser {
             if expr.is_get() {
                 let get_expr = expr.as_get().unwrap();
 
-                let rexpr = self.get_expression(true);
+                let rexpr = self.get_expression(true); // we don't let people do instance.method = () {}
+                                                       // pretty annoying to backport now that i've
+                                                       // seen the bug, might as well say it wasn't
+                                                       // planned
+                                                       
                 self.expect_next(TokenType::EOS, true);
 
                 return Some(
