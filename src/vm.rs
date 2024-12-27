@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, ops::{Add, Div, Mul, Sub}, rc::Rc};
+use std::{borrow::BorrowMut, cell::RefCell, collections::HashMap, ops::{Add, Div, Mul, Sub}, rc::Rc};
 use std::fmt::{Debug, Display};
 
 use enum_as_inner::EnumAsInner;
@@ -549,9 +549,14 @@ impl VirtualMachine{
 
                     match last{
                         Immediate::StructInst(ref sinst) => {
-                            let field = sinst.borrow().fields.get(&name).cloned().unwrap_or(Immediate::Null);
+                            let field = sinst.borrow().get_compiled_var(&name);
 
-                            self.stack.push(field);
+                            let data = match field{
+                                None => sinst.borrow().dyn_data.get(&name).cloned().unwrap_or(Immediate::Null),
+                                Some(field) => self.get_local(field)?
+                            };
+
+                            self.stack.push(data);
                         },
                         _ => return Err(VirtualMachineError::GetNotInstance)
                     }
@@ -562,25 +567,33 @@ impl VirtualMachine{
 
                     match inst{
                         Immediate::StructInst(ref mut sinst) => {
-                            let old_value = sinst.borrow().fields.get(&name)
-                                        .cloned()
-                                        .unwrap_or(Immediate::Null);
+                            let old_pos = sinst.borrow().get_compiled_var(&name);
 
-                            sinst.borrow_mut().fields.insert(name.clone(), match *op {
-                                OpCode::Add => {
-                                    old_value + rvalue
+                            match old_pos{
+                                None => {
+                                    sinst.as_ref().borrow_mut().dyn_data.insert(name, rvalue);
                                 },
-                                OpCode::Multiply => {
-                                    old_value * rvalue
-                                },
-                                OpCode::Divide => {
-                                    old_value / rvalue
-                                },
-                                OpCode::Subtract => {
-                                    old_value - rvalue
-                                }
-                                _ => rvalue,
-                            });
+                                Some(pos) => {
+                                    let old_value = self.get_local(pos)?;
+
+                                    self.set_local(pos, match *op{
+                                        OpCode::Add => {
+                                            old_value + rvalue
+                                        },
+                                        OpCode::Multiply => {
+                                            old_value * rvalue
+                                        },
+                                        OpCode::Divide => {
+                                            old_value / rvalue
+                                        },
+                                        OpCode::Subtract => {
+                                            old_value - rvalue
+                                        },
+                                        _ => rvalue
+                                    });
+
+                                } 
+                            }
 
                         },
                         _ => return Err(VirtualMachineError::GetNotInstance)

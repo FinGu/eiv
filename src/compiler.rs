@@ -1,6 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
-
-use indexmap::map::Keys;
+use std::{borrow::Borrow, collections::HashMap, rc::Rc};
 
 use crate::{ast::{Accept, ControlFlowType, ElseStmt, ExprVisitor, FnStmt, LiteralExpr, Statement, StmtVisitor}, lexer::TokenType, vm::{ Immediate, OpCode}};
 
@@ -14,25 +12,33 @@ pub struct Function{
 #[derive(Clone, Debug, Default)]
 pub struct StructDef{
     pub name: String,
-    pub fields: HashMap<String, Immediate>,
-    pub methods: HashMap<String, Function>
+    pub fields: HashMap<String, i32>,
+    pub methods: HashMap<String, i32>
 
 }
 
 #[derive(Clone, Debug)]
 pub struct StructInst{
     pub from: Rc<StructDef>,
-    pub fields: HashMap<String, Immediate>,
-    pub methods: HashMap<String, Function>
+    pub dyn_data: HashMap<String, Immediate>,
 }
 
 impl StructInst{
     pub fn new(from: Rc<StructDef>) -> Self{
         Self{
             from,
-            fields: HashMap::new(),
-            methods: HashMap::new(),
+            dyn_data: HashMap::new(),
         } 
+    }
+
+    pub fn get_compiled_var(&self, name: &str) -> Option<i32>{
+        let from: &StructDef = self.from.borrow();
+
+        if let Some(&pos) = from.fields.get(name) {
+            return Some(pos);
+        }
+    
+        from.methods.get(name).cloned()
     }
 }
 
@@ -139,17 +145,16 @@ impl SymbolTable {
     }
 }
 
-enum LoopStmtType{
+pub enum LoopStmtType{
     Continue,
     Break
 }
 
 #[derive(Default)]
-struct Loop{
+pub struct Loop{
     continuee: i32,
     breakk: i32,
-    opcodes: Vec<(usize, LoopStmtType)> 
-        // the position of the Continue and Break opcodes
+    opcodes: Vec<(usize, LoopStmtType)> // the position of the Continue and Break opcodes
 }
 
 #[derive(Default)]
@@ -236,6 +241,108 @@ impl Compiler{
 
     pub fn get_cur_stack(&mut self) -> &mut Vec<OpCode>{
         &mut self.cur_func.code
+    }
+}
+
+pub struct StructCompiler<'a>{
+    compiler: &'a mut Compiler,
+    struct_def: StructDef
+}
+
+impl<'a> StructCompiler<'a>{
+    pub fn new(compiler: &'a mut Compiler) -> Self{
+        Self{
+            compiler,
+            struct_def: StructDef::default()
+        }
+    }
+}
+
+impl<'a> StmtVisitor for StructCompiler<'a>{
+    type Output = CompilerResult<()>; //this being the position marked
+
+    fn visit_set_stmt(&mut self, expr: &crate::ast::SetStmt) -> Self::Output {
+        expr.accept(self.compiler)
+    }
+
+    fn visit_if_stmt(&mut self, expr: &crate::ast::IfStmt) -> Self::Output {
+        expr.accept(self.compiler)
+    }
+
+    fn visit_for_stmt(&mut self, expr: &crate::ast::ForStmt) -> Self::Output {
+        expr.accept(self.compiler)
+    }
+
+    fn visit_ctrl_stmt(&mut self, expr: &crate::ast::CtrlStmt) -> Self::Output {
+        expr.accept(self.compiler)
+    }
+
+    fn visit_block_stmt(&mut self, expr: &crate::ast::BlockStmt) -> Self::Output {
+        expr.accept(self.compiler)
+    }
+
+    fn visit_while_stmt(&mut self, expr: &crate::ast::WhileStmt) -> Self::Output {
+        expr.accept(self.compiler)
+    }
+
+    fn visit_struct_stmt(&mut self, expr: &crate::ast::StructStmt) -> Self::Output {
+        expr.accept(self.compiler)
+    }
+
+    fn visit_include_stmt(&mut self, expr: &crate::ast::IncludeStmt) -> Self::Output {
+        todo!()
+    }
+
+    fn visit_variable_stmt(&mut self, expr: &crate::ast::VarStmt) -> Self::Output {
+        let name = expr.name.token_type.as_identifier().unwrap();
+    
+        expr.init.accept(self.compiler)?;
+
+        let pos = self.compiler.symbol_table.mark(name.clone()) as i32;
+
+        self.compiler.get_cur_stack().push(OpCode::SetLocal(pos));
+
+        self.struct_def.fields.insert(name.clone(), pos);
+
+        Ok(())
+    }
+
+    fn visit_function_stmt(&mut self, expr: &FnStmt) -> Self::Output {
+        let name = expr.name.token_type.as_identifier().unwrap();
+
+        let params = &expr.params;
+
+        let mut new_sym_table = SymbolTable::new();
+
+        new_sym_table.mark(name.to_string());
+
+        for param in params{
+            new_sym_table.mark(param.clone());
+        }
+
+        let mut new_compiler = Compiler::new(new_sym_table);
+
+        let mut compiled_result = new_compiler.work(expr.body.clone())?;
+        compiled_result.arity = params.len();
+        compiled_result.name = name.clone();
+
+        let local = self.compiler.symbol_table.mark(name.clone()) as i32;
+
+        self.compiler.get_cur_stack().push(OpCode::Constant(Immediate::Function(compiled_result.into())));
+
+        self.compiler.get_cur_stack().push(OpCode::SetLocal(local));
+
+        self.struct_def.methods.insert(name.clone(), local);
+
+        Ok(())
+    }
+
+    fn visit_array_set_stmt(&mut self, expr: &crate::ast::ArraySetStmt) -> Self::Output {
+        todo!()
+    }
+
+    fn visit_expression_stmt(&mut self, expr: &crate::ast::ExprStmt) -> Self::Output {
+        expr.accept(self.compiler)
     }
 }
 
@@ -429,9 +536,17 @@ impl StmtVisitor for Compiler{
 
         let methods = &expr.methods;
 
+        let mut struct_compiler = StructCompiler::new(self);
+
+        for method in methods{
+            method.accept(&mut struct_compiler)?;
+        }
+
+        let result = struct_compiler.struct_def;
+
         let local = self.symbol_table.mark(name.clone());
 
-        self.get_cur_stack().push(OpCode::Constant(Immediate::StructDef(StructDef::default().into())));
+        self.get_cur_stack().push(OpCode::Constant(Immediate::StructDef(result.into())));
 
         self.get_cur_stack().push(OpCode::SetLocal(local as i32));
 

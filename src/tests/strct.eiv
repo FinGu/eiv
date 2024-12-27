@@ -2,6 +2,12 @@ main = {
     constructor = (){
         println('a');
     }
+
+    cuh = 5
+
+    fn2 = (){
+        println('b');
+    }
 }
 
 a = main()
@@ -9,3 +15,9 @@ a.b = 5
 a.c = 10
 
 println(a.b + a.c)
+
+a.constructor()
+
+a.fn2()
+
+println(a.cuh)
