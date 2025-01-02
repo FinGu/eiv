@@ -1,4 +1,4 @@
-use std::{borrow::BorrowMut, cell::RefCell, collections::HashMap, ops::{Add, Div, Mul, Sub}, rc::Rc};
+use std::{borrow::Borrow, cell::RefCell, collections::HashMap, ops::{Add, Div, Mul, Sub}, rc::Rc};
 use std::fmt::{Debug, Display};
 
 use enum_as_inner::EnumAsInner;
@@ -24,6 +24,8 @@ impl CallFrame{
     }
 }
 
+type BoundFunction = Box<(Rc<Function>, Immediate)>;
+
 #[derive(Clone, Debug, EnumAsInner)]
 pub enum Immediate{
     Number(f64),
@@ -34,6 +36,7 @@ pub enum Immediate{
     GlobalFunction(Box<dyn Callable>),
     StructDef(Rc<RefCell<StructDef>>),
     StructInst(Rc<RefCell<StructInst>>),
+    BoundFunction(BoundFunction),
     Null,
 }
 
@@ -41,8 +44,12 @@ impl Display for Immediate{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self{
             Self::Number(num) => write!(f, "{}", num),
-            Self::Char(chr) => write!(f, "{}", chr),
+            Self::Char(chr) => write!(f, "{}", *chr as char),
+            Self::Array(arr) => write!(f, "{:?}", arr),
+            Self::Boolean(b) => write!(f, "{}", if *b { "true" } else{ "false" }),
             Self::Null => write!(f, "null"),
+            Self::StructInst(inst) => write!(f, "{} instance", 
+                ((*inst).as_ref().borrow().from).as_ref().borrow().name),
             _ => {
                 unimplemented!()
             }
@@ -305,6 +312,21 @@ impl VirtualMachine{
         }
     }
 
+    fn next_instr(&mut self) -> Option<OpCode>{
+        let cur_code = self.get_cur_code();
+        let ip = self.get_ip();
+
+        if ip >= cur_code.len() as i32 {
+            return None;
+        }
+
+        let out = cur_code[ip as usize].clone();
+
+        self.inc_ip(1);
+
+        Some(out)
+    }
+
     fn get_local(&mut self, pos: i32) -> VMResult<Immediate> {
         let frame = self.call_frames.last().unwrap();
 
@@ -390,26 +412,35 @@ impl VirtualMachine{
             Immediate::Function(normal_func) => {
                 if normal_func.arity != params_num{
                     return Err(VirtualMachineError::WrongNumParams);
-
                 }
-             
-                let new_frame = CallFrame::new(Rc::clone(normal_func), 0, 
-                            base as i32);
+
+                let new_frame = CallFrame::new(Rc::clone(normal_func), 0, base as i32);
 
                 self.call_frames.push(new_frame);
+
             },
             Immediate::GlobalFunction(global_func) => {
                 global_func.clone().call(self, params_num)?;
 
-                self.inc_ip(1); //global funcs won't do this for us
+                //self.inc_ip(1); //global funcs won't do this for us
             },
             Immediate::StructDef(sdef) => {
                 let new_inst = StructInst::new(sdef.clone());
 
                 self.stack[base] = Immediate::StructInst(RefCell::new(new_inst).into());
             },
-            Immediate::StructInst(inst) =>{
-                self.inc_ip(1);
+            Immediate::BoundFunction(boundbox) =>{
+                let (ref function, ref instance) = **boundbox;
+
+                if function.arity != params_num{
+                    return Err(VirtualMachineError::WrongNumParams);
+                }
+
+                let new_frame = CallFrame::new(Rc::clone(function), 0, base as i32);
+
+                self.stack[base] = instance.clone();
+
+                self.call_frames.push(new_frame);
             },
             _ => {
                 return Err(VirtualMachineError::FuncDoesntExist);
@@ -431,12 +462,6 @@ impl VirtualMachine{
         self.call_frames.last().unwrap()
     }
 
-    fn set_ip(&mut self, new: i32){
-        let target = self.call_frames.len() - 1;
-
-        self.call_frames[target].ip = new;
-    }
-
     fn get_ip(&self) -> i32{
         self.get_cur_call_frame().ip
     }
@@ -447,19 +472,23 @@ impl VirtualMachine{
         self.call_frames[target].ip += inc;
     }
 
-    pub fn work(&mut self, function: Rc<Function>) -> VMResult<()>{
-        self.call_frames.push(
-            CallFrame::new(function.clone(), 0, 0)
-        );
+    fn setup_call_frame(&mut self, function: Rc<Function>){
+        self.call_frames.push(CallFrame::new(function.clone(), 0, 0));
 
         self.stack.push(Immediate::Function(function.clone()));
+    }
+
+    pub fn work(&mut self, function: Rc<Function>) -> VMResult<()>{
+        self.setup_call_frame(function);
 
         println!("{:?}", self.get_cur_code());
 
-        while self.get_ip() < self.get_cur_code().len() as i32 {
-            let el = self.get_cur_code()[self.get_ip() as usize].clone();
+        loop{
+            let Some(el) = self.next_instr() else { 
+                return Ok(());
+            };
 
-            //println!("IP: {}, Executing: {:?} with last stack value: {:?}", self.get_ip(), el, self.stack.last());
+            //println!("IP: {}, Executing: {:?} with last stack value: {:?}", self.get_ip()-1, el, self.stack.last());
 
             match el{
                 OpCode::Pop => {
@@ -551,9 +580,16 @@ impl VirtualMachine{
 
                     match last{
                         Immediate::StructInst(ref sinst) => {
-                            let data = sinst.borrow().dyn_data.get(&name).cloned().unwrap_or(Immediate::Null);
+                            let data = sinst.as_ref().borrow().dyn_data.get(&name).cloned().unwrap_or(Immediate::Null);
 
-                            self.stack.push(data);
+                            let bound_data = match data{
+                                Immediate::Function(ref fun) => {
+                                    Immediate::BoundFunction(Box::new((fun.clone(), last)))
+                                },
+                                _ => data,
+                            };
+
+                            self.stack.push(bound_data);
                         },
                         _ => return Err(VirtualMachineError::GetNotInstance)
                     }
@@ -564,7 +600,11 @@ impl VirtualMachine{
 
                     match inst{
                         Immediate::StructInst(sinst) => {
-                            let old_data = sinst.as_ref().borrow_mut().dyn_data.get(&name).cloned();
+                            let old_data = sinst
+                                .as_ref()
+                                .borrow_mut()
+                                .dyn_data
+                                .get(&name).cloned();
 
                             sinst.as_ref().borrow_mut().dyn_data.insert(name, match old_data{
                                 None => rvalue,
@@ -601,30 +641,24 @@ impl VirtualMachine{
                         },
                         _ => return Err(VirtualMachineError::BadStructuredStruct)
                     }
-                }
+                },
                 OpCode::JumpIfFalse(offset) => {
                     if let Some(Immediate::Boolean(cond)) = self.stack.last() {
                         if !cond{
                             self.inc_ip(offset);
-                            continue;
                         }
                     }
                 },
                 OpCode::Jump(offset) => {
                     self.inc_ip(offset);
-                    continue;
                 },
                 OpCode::Call(params_num) => {
                     self.call_function(params_num as usize)?;
-                    continue;
-                },
+                }
                 OpCode::Nop => {}
                 _ => unimplemented!()
             } 
-            self.inc_ip(1);
         }
-
-        Ok(())
     }
 }
 

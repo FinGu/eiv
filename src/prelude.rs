@@ -39,7 +39,7 @@ impl Callable for Print{
 
     fn call(&self, vm: &mut VirtualMachine, params_len: usize) -> VMResult<()> {
         for _ in 0..params_len{
-            print!("{:?}", vm.stack.pop().unwrap());
+            print!("{}", vm.stack.pop().unwrap());
         } 
         Ok(())
     } 

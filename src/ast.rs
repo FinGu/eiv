@@ -1,7 +1,7 @@
 use enum_as_inner::EnumAsInner;
 use std::fmt::{Debug, Display};
 
-use crate::{lexer::Token, vm::Immediate};
+use crate::{lexer::{Token, TokenType}, vm::Immediate};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -537,6 +537,12 @@ impl VarExpr {
     pub fn new(name: Token) -> Self {
         Self { name }
     }
+
+    pub fn from_str(name: String, line: i32) -> Self{
+        Self{
+            name: Token { token_type: TokenType::Identifier(name), line }
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -765,6 +771,18 @@ where
     }
 }
 
+impl<Visitor, T> Accept<Visitor> for ThisExpr
+where
+    Visitor: ExprVisitor<Output = T>,
+{
+    type Output = T;
+
+    fn accept(&self, visitor: &mut Visitor) -> Self::Output {
+        visitor.visit_this_expr(self)
+
+    }
+}
+
 impl<Visitor, T> Accept<Visitor> for VarStmt
 where
     Visitor: StmtVisitor<Output = T>,
@@ -880,6 +898,7 @@ where
             Expression::Call(ref call) => call.accept(visitor),
             Expression::Cast(ref cast) => cast.accept(visitor),
             Expression::Get(ref get) => get.accept(visitor),
+            Expression::This(ref this) => this.accept(visitor),
             _ => unimplemented!()
         }
     }

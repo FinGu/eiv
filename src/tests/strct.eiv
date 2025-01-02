@@ -1,23 +1,19 @@
-main = {
-    constructor = (){
-        println('a');
-    }
+dependency = {
+    var = 0
+}
 
-    cuh = 5
+a = dependency()
 
-    fn2 = (ok){
-        println(ok);
+a.var = 10
+
+inter = {
+    var = 9
+    fn = (instance){
+        println(instance.var + this.var) 
     }
 }
 
-a = main()
-a.b = 5
-a.c = 10
+b = inter()
 
-println(a.b + a.c)
+b.fn(a)
 
-a.constructor()
-
-a.fn2('c')
-
-println(a.cuh)

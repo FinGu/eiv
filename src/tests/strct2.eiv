@@ -1,14 +1,13 @@
 struct = {
-    abc = (d){
-        println(5 + d)
-    };
+    fib = (n){
+        if n <= 1{
+            return n
+        }
 
-    dfg = 5;
-
+        return this.fib(n-1) + this.fib(n-2)
+    }
 }
 
 instance = struct()
 
-var = instance.abc
-
-var(2)
+println(instance.fib(10))

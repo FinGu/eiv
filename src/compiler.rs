@@ -1,6 +1,6 @@
 use std::{borrow::Borrow, cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::{ast::{Accept, ControlFlowType, ElseStmt, ExprVisitor, FnStmt, LiteralExpr, Statement, StmtVisitor}, lexer::TokenType, vm::{ Immediate, OpCode}};
+use crate::{ast::{Accept, ControlFlowType, ElseStmt, ExprVisitor, FnStmt, LiteralExpr, Statement, StmtVisitor, VarExpr}, lexer::TokenType, vm::{ Immediate, OpCode}};
 
 #[derive(Clone, Debug, Default)]
 pub struct Function{
@@ -252,7 +252,8 @@ impl<'a> StructCompiler<'a>{
     }
 }
 impl<'a> StmtVisitor for StructCompiler<'a>{
-    type Output = CompilerResult<()>; //this being the position marked
+    type Output = CompilerResult<()>;
+
     fn visit_set_stmt(&mut self, expr: &crate::ast::SetStmt) -> Self::Output {
         expr.accept(self.compiler)
     }
@@ -277,6 +278,7 @@ impl<'a> StmtVisitor for StructCompiler<'a>{
     fn visit_include_stmt(&mut self, expr: &crate::ast::IncludeStmt) -> Self::Output {
         todo!()
     }
+
     fn visit_variable_stmt(&mut self, expr: &crate::ast::VarStmt) -> Self::Output {
         let name = expr.name.token_type.as_identifier().unwrap();
     
@@ -286,6 +288,7 @@ impl<'a> StmtVisitor for StructCompiler<'a>{
 
         Ok(())
     }
+
     fn visit_function_stmt(&mut self, expr: &FnStmt) -> Self::Output {
         let name = expr.name.token_type.as_identifier().unwrap();
 
@@ -293,7 +296,8 @@ impl<'a> StmtVisitor for StructCompiler<'a>{
 
         let mut new_sym_table = SymbolTable::new();
 
-        new_sym_table.mark(name.to_string());
+        new_sym_table.mark(String::from("this"));
+        //new_sym_table.mark(name.to_string());
 
         for param in params{
             new_sym_table.mark(param.clone());
@@ -523,7 +527,7 @@ impl StmtVisitor for Compiler{
 
         let mut struct_compiler = StructCompiler::new(self);
 
-        let methods = &expr.methods;
+        let methods = &expr.methods; //methods isn't accurate
 
         for method in methods{
             method.accept(&mut struct_compiler)?;
@@ -632,8 +636,13 @@ impl ExprVisitor for Compiler{
     }
 
     fn visit_this_expr(&mut self, expr: &crate::ast::ThisExpr) -> Self::Output {
-        unimplemented!()
+        let name = String::from("this");
+
+        let var_expr = VarExpr::from_str(name.clone(), expr.token.line);
+
+        self.visit_variable_expr(&var_expr)
     }
+
     fn visit_array_expr(&mut self, expr: &crate::ast::ArrayExpr) -> Self::Output {
         unimplemented!()
     }
