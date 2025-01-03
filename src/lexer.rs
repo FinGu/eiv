@@ -377,7 +377,7 @@ impl Lexer {
         let ident = &self.source[self.start_idx..self.current_idx];
 
         if let Ok(token_type) = TokenType::try_from(ident) {
-            if token_type.is_as(){
+            if token_type.is_as() {
                 return Ok(());
             }
 

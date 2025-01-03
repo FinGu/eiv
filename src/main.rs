@@ -8,13 +8,13 @@ use compiler::SymbolTable;
 use vm::VirtualMachine;
 
 mod ast;
+mod compiler;
 mod errors;
 mod lexer;
 mod parser;
-mod utils;
-mod compiler;
-mod vm;
 mod prelude;
+mod utils;
+mod vm;
 
 #[cfg(test)]
 mod tests;

@@ -21,7 +21,7 @@ impl ErrorHandler {
         &mut self,
         e: E,
         token: Option<Token>,
-    ) -> Immediate{
+    ) -> Immediate {
         self.list.push(ErrorTuple(Box::new(e), token));
         Immediate::Null
     }
@@ -40,7 +40,7 @@ impl ErrorHandler {
         self.list.clear();
     }
 
-    pub fn empty(&self) -> bool{
+    pub fn empty(&self) -> bool {
         self.list.is_empty()
     }
 }

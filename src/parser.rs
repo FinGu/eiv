@@ -1,9 +1,13 @@
 use crate::{
     ast::{
-        ArrayExpr, ArrayGetExpr, ArraySetStmt, BinaryExpr, CallExpr, CastExpr, ControlFlowType, CtrlStmt, ElseStmt, Expression, FnStmt, ForStmt, GetExpr, GroupingExpr, IfStmt, IncludeStmt, LiteralExpr, SetStmt, Statement, StaticStmt, StructStmt, ThisExpr, UnaryExpr, VarExpr, VarStmt, WhileStmt
+        ArrayExpr, ArrayGetExpr, ArraySetStmt, BinaryExpr, CallExpr, CastExpr, ControlFlowType,
+        CtrlStmt, ElseStmt, Expression, FnStmt, ForStmt, GetExpr, GroupingExpr, IfStmt,
+        IncludeStmt, LiteralExpr, SetStmt, Statement, StaticStmt, StructStmt, ThisExpr, UnaryExpr,
+        VarExpr, VarStmt, WhileStmt,
     },
     errors,
-    lexer::{Token, TokenType}, vm::Immediate,
+    lexer::{Token, TokenType},
+    vm::Immediate,
 };
 use thiserror::Error;
 
@@ -28,7 +32,7 @@ pub enum ParserError {
     ExpectedStringInclude,
 
     #[error("Bad get expression")]
-    BadGetExpr
+    BadGetExpr,
 }
 
 pub struct Parser {
@@ -115,7 +119,7 @@ impl Parser {
             return Some(self.next());
         }
 
-        if !save_errors{
+        if !save_errors {
             return None;
         }
 
@@ -291,10 +295,14 @@ impl Parser {
         CallExpr::new(caller, paren.cloned(), args).into()
     }
 
-    pub fn get_cast(&mut self, display_errors: bool) -> Expression{
+    pub fn get_cast(&mut self, display_errors: bool) -> Expression {
         let mut expr = self.get_call(display_errors);
 
-        while self.match_tokens(&[TokenType::BoolCast, TokenType::CharCast, TokenType::NumberCast]){
+        while self.match_tokens(&[
+            TokenType::BoolCast,
+            TokenType::CharCast,
+            TokenType::NumberCast,
+        ]) {
             let prev = self.previous().clone();
 
             expr = CastExpr::new(prev, expr).into();
@@ -532,10 +540,10 @@ impl Parser {
 
     pub fn get_include_statement(&mut self) -> Statement {
         if self.in_fn() || self.in_loop() || self.in_loop() {
-            errors::LIST
-                .lock()
-                .unwrap()
-                .push(ParserError::IncludeOutsideMainScope, Some(self.peek().clone()));
+            errors::LIST.lock().unwrap().push(
+                ParserError::IncludeOutsideMainScope,
+                Some(self.peek().clone()),
+            );
         }
 
         let cur_tok = self.peek().clone();
@@ -545,8 +553,11 @@ impl Parser {
         if let TokenType::String(ref str_) = cur_tok.token_type {
             self.cur += 1;
 
-            if *str_ == self.file_name{
-                errors::LIST.lock().unwrap().push(ParserError::CantIncludeItself, Some(cur_tok));
+            if *str_ == self.file_name {
+                errors::LIST
+                    .lock()
+                    .unwrap()
+                    .push(ParserError::CantIncludeItself, Some(cur_tok));
                 return empty;
             }
 
@@ -555,11 +566,13 @@ impl Parser {
             return IncludeStmt::new(str_.clone()).into();
         }
 
-        errors::LIST.lock().unwrap().push(ParserError::ExpectedStringInclude, Some(cur_tok));
+        errors::LIST
+            .lock()
+            .unwrap()
+            .push(ParserError::ExpectedStringInclude, Some(cur_tok));
 
         empty
     }
-
 
     pub fn get_statement(&mut self) -> Statement {
         if self.match_tokens(&[TokenType::If]) {
@@ -586,7 +599,7 @@ impl Parser {
             return self.get_return_statement();
         }
 
-        if self.match_tokens(&[TokenType::Include]){
+        if self.match_tokens(&[TokenType::Include]) {
             return self.get_include_statement();
         }
 
@@ -693,15 +706,15 @@ impl Parser {
 
             self.cur -= 1; // the reason we decrement is so that the parser gets the left paren
             let expr = self.get_expression(false);
-            
+
             // this is the only case where we have to
             // disable errors for get_expression
 
-            //we have to deal with the ambiguity of 
+            //we have to deal with the ambiguity of
             //a = (dfg) + something
             //a = (dfg){}
-                
-            if self.match_tokens(&[TokenType::EOS]){
+
+            if self.match_tokens(&[TokenType::EOS]) {
                 let stmt = VarStmt::new(name, expr);
 
                 return stmt.into();
@@ -710,7 +723,6 @@ impl Parser {
             self.cur = saved_pos;
 
             self.get_function_declaration(name)
-
         } else if self.match_tokens(&[TokenType::LeftBrace]) {
             let strct = self.get_struct_declaration(name);
 
@@ -748,7 +760,7 @@ impl Parser {
                                                        // pretty annoying to backport now that i've
                                                        // seen the bug, might as well say it wasn't
                                                        // planned
-                                                       
+
                 self.expect_next(TokenType::EOS, true);
 
                 return Some(

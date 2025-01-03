@@ -1,0 +1,23 @@
+data = {
+    constructor = (){
+        println('a')
+    }
+
+    abc = (){
+        this.b = 'c'
+        println('b')
+    }
+}
+
+
+main = {
+    constructor = (dep){
+        this.inner = dep();
+    }
+}
+
+a = main(data)
+
+a.inner.abc()
+
+println(a.inner.b)

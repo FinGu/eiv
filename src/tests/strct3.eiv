@@ -11,6 +11,6 @@ strct1 = {
 }
 
 a = strct1()
-a.constructor()
 
 println(this)
+println(a)

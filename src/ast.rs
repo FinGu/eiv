@@ -1,7 +1,10 @@
 use enum_as_inner::EnumAsInner;
 use std::fmt::{Debug, Display};
 
-use crate::{lexer::{Token, TokenType}, vm::Immediate};
+use crate::{
+    lexer::{Token, TokenType},
+    vm::Immediate,
+};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -82,7 +85,6 @@ pub trait Accept<Visitor> {
     type Output;
     fn accept(&self, visitor: &mut Visitor) -> Self::Output;
 }
-
 
 pub trait ExprVisitor {
     type Output;
@@ -376,10 +378,10 @@ impl From<CtrlStmt> for Statement {
 
 #[derive(Clone, Debug)]
 pub struct IncludeStmt {
-    pub file: String
+    pub file: String,
 }
 
-impl IncludeStmt{
+impl IncludeStmt {
     pub fn new(file: String) -> Self {
         Self { file }
     }
@@ -538,9 +540,12 @@ impl VarExpr {
         Self { name }
     }
 
-    pub fn from_str(name: String, line: i32) -> Self{
-        Self{
-            name: Token { token_type: TokenType::Identifier(name), line }
+    pub fn from_str(name: String, line: i32) -> Self {
+        Self {
+            name: Token {
+                token_type: TokenType::Identifier(name),
+                line,
+            },
         }
     }
 }
@@ -680,7 +685,7 @@ where
     }
 }
 
-impl<Visitor, T> Accept<Visitor> for BinaryExpr 
+impl<Visitor, T> Accept<Visitor> for BinaryExpr
 where
     Visitor: ExprVisitor<Output = T>,
 {
@@ -702,7 +707,7 @@ where
     }
 }
 
-impl<Visitor, T> Accept<Visitor> for CastExpr 
+impl<Visitor, T> Accept<Visitor> for CastExpr
 where
     Visitor: ExprVisitor<Output = T>,
 {
@@ -713,7 +718,7 @@ where
     }
 }
 
-impl<Visitor, T> Accept<Visitor> for GetExpr 
+impl<Visitor, T> Accept<Visitor> for GetExpr
 where
     Visitor: ExprVisitor<Output = T>,
 {
@@ -724,8 +729,7 @@ where
     }
 }
 
-
-impl<Visitor, T> Accept<Visitor> for GroupingExpr 
+impl<Visitor, T> Accept<Visitor> for GroupingExpr
 where
     Visitor: ExprVisitor<Output = T>,
 {
@@ -747,7 +751,6 @@ where
     }
 }
 
-
 impl<Visitor, T> Accept<Visitor> for VarExpr
 where
     Visitor: ExprVisitor<Output = T>,
@@ -767,7 +770,6 @@ where
 
     fn accept(&self, visitor: &mut Visitor) -> Self::Output {
         visitor.visit_call_expr(self)
-
     }
 }
 
@@ -779,7 +781,6 @@ where
 
     fn accept(&self, visitor: &mut Visitor) -> Self::Output {
         visitor.visit_this_expr(self)
-
     }
 }
 
@@ -827,7 +828,7 @@ where
     }
 }
 
-impl<Visitor, T> Accept<Visitor> for ForStmt 
+impl<Visitor, T> Accept<Visitor> for ForStmt
 where
     Visitor: StmtVisitor<Output = T>,
 {
@@ -871,7 +872,7 @@ where
     }
 }
 
-impl<Visitor, T> Accept<Visitor> for SetStmt 
+impl<Visitor, T> Accept<Visitor> for SetStmt
 where
     Visitor: StmtVisitor<Output = T>,
 {
@@ -899,7 +900,7 @@ where
             Expression::Cast(ref cast) => cast.accept(visitor),
             Expression::Get(ref get) => get.accept(visitor),
             Expression::This(ref this) => this.accept(visitor),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 }
@@ -922,7 +923,7 @@ where
             Statement::ControlFlow(ref cflow) => cflow.accept(visitor),
             Statement::Struct(ref strct) => strct.accept(visitor),
             Statement::Set(ref set) => set.accept(visitor),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 }
