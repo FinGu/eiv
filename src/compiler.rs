@@ -49,21 +49,7 @@ pub struct Local{
     id: String,
     scope: usize,
 }
-//a = 5
-//println(a)
-//Constant(5) SetLocal(0) GetLocal(0) GetGobal("println") Call
-//a = 5
-//{
-//a = 7
-//}
-//
-//a = 5
-//b = 6
-//{ 
-//a = 7
-//}
 
-//a, b, a
 #[derive(Clone, Debug)]
 pub struct SymbolTable {
     symbols: Vec<Local>,
@@ -103,9 +89,6 @@ impl SymbolTable {
 
         None
     }
-
-    //Local{ a, 0 }
-    //
 
     pub fn mark(&mut self, name: String) -> usize {
         let mut out = if !self.symbols.is_empty(){
@@ -251,6 +234,7 @@ impl<'a> StructCompiler<'a>{
         }
     }
 }
+
 impl<'a> StmtVisitor for StructCompiler<'a>{
     type Output = CompilerResult<()>;
 
@@ -296,8 +280,8 @@ impl<'a> StmtVisitor for StructCompiler<'a>{
 
         let mut new_sym_table = SymbolTable::new();
 
-        new_sym_table.mark(String::from("this"));
-        //new_sym_table.mark(name.to_string());
+        //new_sym_table.mark(String::from("this"));
+        new_sym_table.mark(name.to_string());
 
         for param in params{
             new_sym_table.mark(param.clone());
@@ -341,12 +325,6 @@ impl StmtVisitor for Compiler{
         Ok(())
     }
 
-    //comp
-    //jump_caso_falso
-    //then
-    //jump saida
-    //else
-    //saida
     fn visit_if_stmt(&mut self, expr: &crate::ast::IfStmt) -> Self::Output {
         expr.cond.accept(self)?;
 
@@ -636,11 +614,13 @@ impl ExprVisitor for Compiler{
     }
 
     fn visit_this_expr(&mut self, expr: &crate::ast::ThisExpr) -> Self::Output {
-        let name = String::from("this");
+        self.get_cur_stack().push(OpCode::This);
+        Ok(())
+        /*let name = String::from("this");
 
         let var_expr = VarExpr::from_str(name.clone(), expr.token.line);
 
-        self.visit_variable_expr(&var_expr)
+        self.visit_variable_expr(&var_expr)*/
     }
 
     fn visit_array_expr(&mut self, expr: &crate::ast::ArrayExpr) -> Self::Output {

@@ -1,0 +1,16 @@
+strct1 = {
+    constructor = (){
+        println(this)
+
+        fun = (){
+            println(this)
+        }
+
+        fun()
+    }
+}
+
+a = strct1()
+a.constructor()
+
+println(this)

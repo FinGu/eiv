@@ -1,13 +1,20 @@
 struct = {
+    cool_var = 5
+
     fib = (n){
         if n <= 1{
             return n
         }
+        
+        println(this.cool_var)
+        this.cool_var = n
 
-        return this.fib(n-1) + this.fib(n-2)
+        return fib(n-1) + fib(n-2)
     }
 }
 
 instance = struct()
 
 println(instance.fib(10))
+
+println(instance.cool_var)

@@ -9,15 +9,18 @@ use crate::{compiler::{Function, StructDef, StructInst}, prelude::Callable};
 pub struct CallFrame{
     function: Rc<Function>,
 
+    instance: Option<Immediate>,
+
     base: i32,
 
     ip: i32,
 }
 
 impl CallFrame{
-    pub fn new(function: Rc<Function>, ip: i32, base: i32) -> Self{
+    pub fn new(function: Rc<Function>, ip: i32, base: i32, instance: Option<Immediate>) -> Self{
         Self{
             function,
+            instance,
             ip, 
             base,
         }
@@ -50,6 +53,7 @@ impl Display for Immediate{
             Self::Null => write!(f, "null"),
             Self::StructInst(inst) => write!(f, "{} instance", 
                 ((*inst).as_ref().borrow().from).as_ref().borrow().name),
+            Self::Function(fun) => write!(f, "{} function", fun.name),
             _ => {
                 unimplemented!()
             }
@@ -291,6 +295,7 @@ pub enum OpCode{
     SetProp(String, Box<OpCode>),
 
     Call(i32),
+    This,
 
     Constant(Immediate),
 
@@ -414,15 +419,14 @@ impl VirtualMachine{
                     return Err(VirtualMachineError::WrongNumParams);
                 }
 
-                let new_frame = CallFrame::new(Rc::clone(normal_func), 0, base as i32);
+                let cur_inst = self.get_cur_call_frame().instance.clone();
+
+                let new_frame = CallFrame::new(Rc::clone(normal_func), 0, base as i32, cur_inst);
 
                 self.call_frames.push(new_frame);
-
             },
             Immediate::GlobalFunction(global_func) => {
                 global_func.clone().call(self, params_num)?;
-
-                //self.inc_ip(1); //global funcs won't do this for us
             },
             Immediate::StructDef(sdef) => {
                 let new_inst = StructInst::new(sdef.clone());
@@ -436,9 +440,7 @@ impl VirtualMachine{
                     return Err(VirtualMachineError::WrongNumParams);
                 }
 
-                let new_frame = CallFrame::new(Rc::clone(function), 0, base as i32);
-
-                self.stack[base] = instance.clone();
+                let new_frame = CallFrame::new(Rc::clone(function), 0, base as i32, Some(instance.clone()));
 
                 self.call_frames.push(new_frame);
             },
@@ -473,7 +475,7 @@ impl VirtualMachine{
     }
 
     fn setup_call_frame(&mut self, function: Rc<Function>){
-        self.call_frames.push(CallFrame::new(function.clone(), 0, 0));
+        self.call_frames.push(CallFrame::new(function.clone(), 0, 0, None));
 
         self.stack.push(Immediate::Function(function.clone()));
     }
@@ -581,6 +583,7 @@ impl VirtualMachine{
                     match last{
                         Immediate::StructInst(ref sinst) => {
                             let data = sinst.as_ref().borrow().dyn_data.get(&name).cloned().unwrap_or(Immediate::Null);
+                            //self.get_cur_call_frame().instance = Some(last);
 
                             let bound_data = match data{
                                 Immediate::Function(ref fun) => {
@@ -654,6 +657,13 @@ impl VirtualMachine{
                 },
                 OpCode::Call(params_num) => {
                     self.call_function(params_num as usize)?;
+                },
+                OpCode::This => {
+                    self.stack.push(self.get_cur_call_frame()
+                        .instance
+                        .clone()
+                        .unwrap_or(Immediate::Null)
+                    );
                 }
                 OpCode::Nop => {}
                 _ => unimplemented!()
