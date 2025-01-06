@@ -8,10 +8,50 @@ use std::{
 
 use enum_as_inner::EnumAsInner;
 
+use crate::compiler::SDefImmediate;
 use crate::{
     compiler::{Function, StructDef},
     prelude::Callable,
 };
+
+type WrappedStructDef = Rc<RefCell<StructDef>>;
+type WrappedStructInst = Rc<RefCell<StructInst>>;
+
+#[derive(Clone, Debug)]
+pub struct StructInst {
+    pub from: WrappedStructDef,
+    pub data: HashMap<String, Immediate>,
+}
+
+impl StructInst {
+    pub fn new(from: WrappedStructDef) -> Self {
+        let mut dyn_data = HashMap::new();
+
+        let vars = &from.as_ref().borrow().clone().data;
+
+        for (name, data) in vars {
+            if data.is_static{
+                continue;
+            }
+
+            dyn_data.insert(name.clone(), data.value.clone());
+        }
+
+        Self {
+            from,
+            data: dyn_data,
+        }
+    }
+
+    pub fn get(&self, name: &str) -> Immediate {
+        self.data.get(name).cloned().unwrap_or(Immediate::Null)
+    }
+
+    pub fn insert(&mut self, name: String, data: Immediate) {
+        self.data.insert(name, data);
+    }
+}
+
 
 #[derive(Debug)]
 pub struct CallFrame {
@@ -35,37 +75,6 @@ impl CallFrame {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct StructInst {
-    pub from: Rc<RefCell<StructDef>>,
-    pub data: HashMap<String, Immediate>,
-}
-
-impl StructInst {
-    pub fn new(from: Rc<RefCell<StructDef>>) -> Self {
-        let mut dyn_data = HashMap::new();
-
-        let vars = &from.as_ref().borrow().data.clone();
-
-        for (name, data) in vars {
-            dyn_data.insert(name.clone(), data.clone());
-        }
-
-        Self {
-            from,
-            data: dyn_data,
-        }
-    }
-
-    pub fn get(&self, name: &str) -> Immediate {
-        self.data.get(name).cloned().unwrap_or(Immediate::Null)
-    }
-
-    pub fn insert(&mut self, name: String, data: Immediate) {
-        self.data.insert(name, data);
-    }
-}
-
 type BoundFunction = Box<(Rc<Function>, Immediate)>;
 
 #[derive(Clone, Debug, EnumAsInner)]
@@ -76,10 +85,17 @@ pub enum Immediate {
     Array(Vec<Immediate>),
     Function(Rc<Function>),
     GlobalFunction(Box<dyn Callable>),
-    StructDef(Rc<RefCell<StructDef>>),
-    StructInst(Rc<RefCell<StructInst>>),
+    StructDef(WrappedStructDef),
+    StructInst(WrappedStructInst),
     BoundFunction(BoundFunction),
     Null,
+}
+
+
+impl From<StructInst> for Immediate{
+    fn from(value: StructInst) -> Self {
+        Immediate::StructInst(RefCell::new(value).into())
+    }
 }
 
 impl Display for Immediate {
@@ -323,6 +339,8 @@ pub enum OpCode {
     GetLocal(i32),
 
     SetStructVar(String),
+    SetStaticStructVar(String),
+    GetStructVar(String),
 
     GetGlobal(String),
     SetGlobal(String),
@@ -464,7 +482,7 @@ impl VirtualMachine {
             Immediate::StructDef(sdef) => {
                 let new_inst = StructInst::new(sdef.clone());
 
-                self.stack[base] = Immediate::StructInst(RefCell::new(new_inst).into());
+                self.stack[base] = new_inst.into();
 
                 let instance_unwrapped = self.stack[base]
                     .as_struct_inst()
@@ -667,16 +685,44 @@ impl VirtualMachine {
                     _ => return Err(VirtualMachineError::GetNotInstance),
                 }
             }
+            OpCode::GetStructVar(name) => {
+                let sstruct = self.stack.last().unwrap();
+
+                match sstruct {
+                    Immediate::StructDef(sdef) => {
+                        let value = sdef.as_ref().borrow().get(&name).value;
+
+                        self.stack.push(value);
+                    }
+                    _ => return Err(VirtualMachineError::BadStructuredStruct),
+                }
+
+            },
             OpCode::SetStructVar(name) => {
                 let to_set = self.stack.pop().unwrap();
                 let sstruct = self.stack.last().unwrap();
 
                 match sstruct {
                     Immediate::StructDef(sdef) => {
-                        sdef.as_ref().borrow_mut().insert(name, to_set);
+                        sdef.as_ref().borrow_mut().insert(name, to_set.into());
                     }
                     _ => return Err(VirtualMachineError::BadStructuredStruct),
                 }
+            },
+            OpCode::SetStaticStructVar(name) => {
+                let to_set = self.stack.pop().unwrap();
+                let sstruct = self.stack.last().unwrap();
+
+                match sstruct {
+                    Immediate::StructDef(sdef) => {
+                        sdef.as_ref().borrow_mut().insert(name, SDefImmediate{ 
+                            value: to_set, 
+                            is_static: true 
+                        });
+                    }
+                    _ => return Err(VirtualMachineError::BadStructuredStruct),
+                }
+
             }
             OpCode::JumpIfFalse(offset) => {
                 if let Some(Immediate::Boolean(cond)) = self.stack.last() {
@@ -708,7 +754,7 @@ impl VirtualMachine {
     pub fn work(&mut self, function: Rc<Function>) -> VMResult<()> {
         self.setup_call_frame(function);
 
-        //println!("{:?}", self.get_cur_code());
+        println!("{:?}", self.get_cur_code());
 
         while let Some(el) = self.next_instr() {
             //println!("IP: {}, Executing: {:?} with last stack value: {:?}", self.get_ip()-1, el, self.stack.last());

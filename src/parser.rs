@@ -2,7 +2,7 @@ use crate::{
     ast::{
         ArrayExpr, ArrayGetExpr, ArraySetStmt, BinaryExpr, CallExpr, CastExpr, ControlFlowType,
         CtrlStmt, ElseStmt, Expression, FnStmt, ForStmt, GetExpr, GroupingExpr, IfStmt,
-        IncludeStmt, LiteralExpr, SetStmt, Statement, StaticStmt, StructStmt, ThisExpr, UnaryExpr,
+        IncludeStmt, LiteralExpr, SetStmt, Statement, StructStmt, ThisExpr, UnaryExpr,
         VarExpr, VarStmt, WhileStmt,
     },
     errors,
@@ -652,12 +652,17 @@ impl Parser {
             let is_static = self.match_tokens(&[TokenType::Static]);
 
             match self.get_optional_either_declaration(true) {
-                Some(res) => {
-                    var_vec.push(if is_static {
-                        StaticStmt::new(res).into()
-                    } else {
-                        res
-                    });
+                Some(mut res) => {
+                    if is_static{
+                        match res{
+                            Statement::Variable(ref mut v) => {v.is_static = true;},
+                            Statement::Struct(ref mut s) => {s.is_static = true;},
+                            Statement::Function(ref mut f) => {f.is_static = true;},
+                            _ => {}
+                        };
+                    }
+
+                    var_vec.push(res);
                 }
                 None => {
                     //errors::LIST.lock().unwrap().push(ParserError::BadStmtStruct, Some(self.peek().clone()));

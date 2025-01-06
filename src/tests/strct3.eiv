@@ -1,16 +1,14 @@
 strct1 = {
-    constructor = (){
-        println(this)
-
-        fun = (){
-            println(this)
-        }
-
-        fun()
+    strct2 = {
+        constructor = () {
+            println('a')
+            this.b = 5
+        } 
     }
 }
 
 a = strct1()
 
-println(this)
-println(a)
+var = a.strct2()
+
+println(var.b)

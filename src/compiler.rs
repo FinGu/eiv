@@ -16,18 +16,30 @@ pub struct Function {
     pub code: Vec<OpCode>,
 }
 
+#[derive(Clone, Debug)]
+pub struct SDefImmediate{
+    pub value: Immediate,
+    pub is_static: bool
+}
+
+impl From<Immediate> for SDefImmediate{
+    fn from(value: Immediate) -> Self {
+        SDefImmediate{value, is_static: false}
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct StructDef {
     pub name: String,
-    pub data: HashMap<String, Immediate>,
+    pub data: HashMap<String, SDefImmediate>,
 }
 
 impl StructDef {
-    pub fn get(&self, name: &str) -> Immediate {
-        self.data.get(name).cloned().unwrap_or(Immediate::Null)
+    pub fn get(&self, name: &str) -> SDefImmediate{
+        self.data.get(name).cloned().unwrap_or(Immediate::Null.into())
     }
 
-    pub fn insert(&mut self, name: String, data: Immediate) {
+    pub fn insert(&mut self, name: String, data: SDefImmediate) {
         self.data.insert(name, data);
     }
 }
@@ -263,7 +275,34 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
         expr.accept(self.compiler)
     }
     fn visit_struct_stmt(&mut self, expr: &crate::ast::StructStmt) -> Self::Output {
-        expr.accept(self.compiler)
+        let name = expr.name.token_type.as_identifier().unwrap();
+
+        let new_struct = RefCell::new(StructDef {
+            name: name.clone(),
+            ..Default::default()
+        });
+
+        let name = expr.name.token_type.as_identifier().unwrap();
+
+        self.compiler.get_cur_stack()
+            .push(OpCode::Constant(Immediate::StructDef(new_struct.into())));
+
+        self.compiler.get_cur_stack().push(OpCode::SetStructVar(name.clone()));
+
+        self.compiler.get_cur_stack().push(OpCode::GetStructVar(name.clone()));
+
+        let mut struct_compiler = StructCompiler::new(self.compiler);
+
+        let methods = &expr.methods; //methods isn't accurate
+
+        for method in methods {
+            method.accept(&mut struct_compiler)?;
+        }
+
+        self.compiler.get_cur_stack().push(OpCode::Pop);
+
+        Ok(())
+
     }
     fn visit_include_stmt(&mut self, expr: &crate::ast::IncludeStmt) -> Self::Output {
         todo!()
@@ -320,9 +359,11 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
     fn visit_array_set_stmt(&mut self, expr: &crate::ast::ArraySetStmt) -> Self::Output {
         todo!()
     }
+
     fn visit_expression_stmt(&mut self, expr: &crate::ast::ExprStmt) -> Self::Output {
         expr.accept(self.compiler)
     }
+
 }
 
 impl StmtVisitor for Compiler {

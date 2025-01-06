@@ -211,7 +211,6 @@ pub enum Statement {
     Include(Box<IncludeStmt>),
     Set(Box<SetStmt>),
     ArraySet(Box<ArraySetStmt>),
-    Static(Box<StaticStmt>),
 }
 
 #[derive(Clone, Debug)]
@@ -397,11 +396,12 @@ impl From<IncludeStmt> for Statement {
 pub struct VarStmt {
     pub name: Token,
     pub init: Expression,
+    pub is_static: bool,
 }
 
 impl VarStmt {
     pub fn new(name: Token, init: Expression) -> Self {
-        Self { name, init }
+        Self { name, init, is_static: false }
     }
 }
 
@@ -416,11 +416,12 @@ pub struct FnStmt {
     pub name: Token,
     pub params: Vec<String>,
     pub body: Vec<Statement>,
+    pub is_static: bool
 }
 
 impl FnStmt {
     pub fn new(name: Token, params: Vec<String>, body: Vec<Statement>) -> Self {
-        Self { name, params, body }
+        Self { name, params, body, is_static: false }
     }
 }
 
@@ -434,11 +435,12 @@ impl From<FnStmt> for Statement {
 pub struct StructStmt {
     pub name: Token,
     pub methods: Vec<Statement>, // a subset of statements, corresponding only to declarations
+    pub is_static: bool
 }
 
 impl StructStmt {
     pub fn new(name: Token, methods: Vec<Statement>) -> Self {
-        Self { name, methods }
+        Self { name, methods, is_static: false }
     }
 }
 
@@ -655,22 +657,6 @@ impl ArraySetStmt {
 impl From<ArraySetStmt> for Statement {
     fn from(value: ArraySetStmt) -> Self {
         Self::ArraySet(Box::new(value))
-    }
-}
-#[derive(Clone, Debug)]
-pub struct StaticStmt {
-    pub inner: Statement,
-}
-
-impl StaticStmt {
-    pub fn new(inner: Statement) -> Self {
-        Self { inner }
-    }
-}
-
-impl From<StaticStmt> for Statement {
-    fn from(value: StaticStmt) -> Self {
-        Self::Static(Box::new(value))
     }
 }
 
