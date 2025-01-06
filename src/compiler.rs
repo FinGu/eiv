@@ -16,31 +16,34 @@ pub struct Function {
     pub code: Vec<OpCode>,
 }
 
-#[derive(Clone, Debug)]
-pub struct SDefImmediate{
-    pub value: Immediate,
-    pub is_static: bool
-}
-
-impl From<Immediate> for SDefImmediate{
-    fn from(value: Immediate) -> Self {
-        SDefImmediate{value, is_static: false}
-    }
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct StructDef {
     pub name: String,
-    pub data: HashMap<String, SDefImmediate>,
+    pub normal_data: HashMap<String, Immediate>,
+    pub static_data: HashMap<String, Immediate>,
 }
 
 impl StructDef {
-    pub fn get(&self, name: &str) -> SDefImmediate{
-        self.data.get(name).cloned().unwrap_or(Immediate::Null.into())
+    pub fn get_normal(&self, name: &str) -> Immediate {
+        self.normal_data
+            .get(name)
+            .cloned()
+            .unwrap_or(Immediate::Null)
     }
 
-    pub fn insert(&mut self, name: String, data: SDefImmediate) {
-        self.data.insert(name, data);
+    pub fn insert_normal(&mut self, name: String, data: Immediate) {
+        self.normal_data.insert(name, data);
+    }
+
+    pub fn get_static(&self, name: &str) -> Immediate {
+        self.static_data
+            .get(name)
+            .cloned()
+            .unwrap_or(Immediate::Null)
+    }
+
+    pub fn insert_static(&mut self, name: String, data: Immediate) {
+        self.static_data.insert(name, data);
     }
 }
 
@@ -284,12 +287,27 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
 
         let name = expr.name.token_type.as_identifier().unwrap();
 
-        self.compiler.get_cur_stack()
+        self.compiler
+            .get_cur_stack()
             .push(OpCode::Constant(Immediate::StructDef(new_struct.into())));
 
-        self.compiler.get_cur_stack().push(OpCode::SetStructVar(name.clone()));
+        if expr.is_static {
+            self.compiler
+                .get_cur_stack()
+                .push(OpCode::SetStaticStructVar(name.clone()));
 
-        self.compiler.get_cur_stack().push(OpCode::GetStructVar(name.clone()));
+            self.compiler
+                .get_cur_stack()
+                .push(OpCode::GetStaticStructVar(name.clone()));
+        } else {
+            self.compiler
+                .get_cur_stack()
+                .push(OpCode::SetStructVar(name.clone()));
+
+            self.compiler
+                .get_cur_stack()
+                .push(OpCode::GetStructVar(name.clone()));
+        }
 
         let mut struct_compiler = StructCompiler::new(self.compiler);
 
@@ -302,7 +320,6 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
         self.compiler.get_cur_stack().push(OpCode::Pop);
 
         Ok(())
-
     }
     fn visit_include_stmt(&mut self, expr: &crate::ast::IncludeStmt) -> Self::Output {
         todo!()
@@ -313,9 +330,11 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
 
         expr.init.accept(self.compiler)?;
 
-        self.compiler
-            .get_cur_stack()
-            .push(OpCode::SetStructVar(name.clone()));
+        self.compiler.get_cur_stack().push(if expr.is_static {
+            OpCode::SetStaticStructVar(name.clone())
+        } else {
+            OpCode::SetStructVar(name.clone())
+        });
 
         Ok(())
     }
@@ -349,9 +368,11 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
                 compiled_result.into(),
             )));
 
-        self.compiler
-            .get_cur_stack()
-            .push(OpCode::SetStructVar(name.clone()));
+        self.compiler.get_cur_stack().push(if expr.is_static {
+            OpCode::SetStaticStructVar(name.clone())
+        } else {
+            OpCode::SetStructVar(name.clone())
+        });
 
         Ok(())
     }
@@ -363,7 +384,6 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
     fn visit_expression_stmt(&mut self, expr: &crate::ast::ExprStmt) -> Self::Output {
         expr.accept(self.compiler)
     }
-
 }
 
 impl StmtVisitor for Compiler {
@@ -637,7 +657,11 @@ impl ExprVisitor for Compiler {
 
         let name = expr.argument.token_type.as_identifier().unwrap().clone();
 
-        self.get_cur_stack().push(OpCode::GetProp(name));
+        if expr.is_static{
+            self.get_cur_stack().push(OpCode::GetStaticProp(name));
+        } else{
+            self.get_cur_stack().push(OpCode::GetProp(name));
+        }
 
         Ok(())
     }

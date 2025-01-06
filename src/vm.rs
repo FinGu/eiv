@@ -8,7 +8,6 @@ use std::{
 
 use enum_as_inner::EnumAsInner;
 
-use crate::compiler::SDefImmediate;
 use crate::{
     compiler::{Function, StructDef},
     prelude::Callable,
@@ -27,14 +26,10 @@ impl StructInst {
     pub fn new(from: WrappedStructDef) -> Self {
         let mut dyn_data = HashMap::new();
 
-        let vars = &from.as_ref().borrow().clone().data;
+        let vars = &from.as_ref().borrow().clone().normal_data;
 
         for (name, data) in vars {
-            if data.is_static{
-                continue;
-            }
-
-            dyn_data.insert(name.clone(), data.value.clone());
+            dyn_data.insert(name.clone(), data.clone());
         }
 
         Self {
@@ -51,7 +46,6 @@ impl StructInst {
         self.data.insert(name, data);
     }
 }
-
 
 #[derive(Debug)]
 pub struct CallFrame {
@@ -91,8 +85,7 @@ pub enum Immediate {
     Null,
 }
 
-
-impl From<StructInst> for Immediate{
+impl From<StructInst> for Immediate {
     fn from(value: StructInst) -> Self {
         Immediate::StructInst(RefCell::new(value).into())
     }
@@ -341,12 +334,16 @@ pub enum OpCode {
     SetStructVar(String),
     SetStaticStructVar(String),
     GetStructVar(String),
+    GetStaticStructVar(String),
+    //these are for struct defs
 
     GetGlobal(String),
     SetGlobal(String),
 
     GetProp(String),
+    GetStaticProp(String),
     SetProp(String, Box<OpCode>),
+    //these are for struct instances
 
     Call(i32),
     This,
@@ -372,7 +369,7 @@ impl VirtualMachine {
     }
 
     fn next_instr(&mut self) -> Option<OpCode> {
-        if self.call_frames.is_empty(){
+        if self.call_frames.is_empty() {
             return None;
         }
 
@@ -659,6 +656,18 @@ impl VirtualMachine {
                     }
                     _ => return Err(VirtualMachineError::GetNotInstance),
                 }
+            },
+            OpCode::GetStaticProp(name) => {
+                let last = self.stack.pop().unwrap();
+
+                match last {
+                    Immediate::StructDef(ref def) => {
+                        let value = def.as_ref().borrow().get_static(&name);
+                        self.stack.push(value);
+                    }
+                    _ => return Err(VirtualMachineError::GetNotInstance),
+                }
+
             }
             OpCode::SetProp(name, op) => {
                 let rvalue = self.stack.pop().unwrap();
@@ -690,39 +699,34 @@ impl VirtualMachine {
 
                 match sstruct {
                     Immediate::StructDef(sdef) => {
-                        let value = sdef.as_ref().borrow().get(&name).value;
+                        let value = sdef.as_ref().borrow().get_normal(&name);
 
                         self.stack.push(value);
                     }
                     _ => return Err(VirtualMachineError::BadStructuredStruct),
                 }
-
-            },
+            }
             OpCode::SetStructVar(name) => {
                 let to_set = self.stack.pop().unwrap();
                 let sstruct = self.stack.last().unwrap();
 
                 match sstruct {
                     Immediate::StructDef(sdef) => {
-                        sdef.as_ref().borrow_mut().insert(name, to_set.into());
+                        sdef.as_ref().borrow_mut().insert_normal(name, to_set);
                     }
                     _ => return Err(VirtualMachineError::BadStructuredStruct),
                 }
-            },
+            }
             OpCode::SetStaticStructVar(name) => {
                 let to_set = self.stack.pop().unwrap();
                 let sstruct = self.stack.last().unwrap();
 
                 match sstruct {
                     Immediate::StructDef(sdef) => {
-                        sdef.as_ref().borrow_mut().insert(name, SDefImmediate{ 
-                            value: to_set, 
-                            is_static: true 
-                        });
+                        sdef.as_ref().borrow_mut().insert_static(name, to_set);
                     }
                     _ => return Err(VirtualMachineError::BadStructuredStruct),
                 }
-
             }
             OpCode::JumpIfFalse(offset) => {
                 if let Some(Immediate::Boolean(cond)) = self.stack.last() {

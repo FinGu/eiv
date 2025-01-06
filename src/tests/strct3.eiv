@@ -12,3 +12,4 @@ a = strct1()
 var = a.strct2()
 
 println(var.b)
+println(a.b)

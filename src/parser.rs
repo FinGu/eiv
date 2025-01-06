@@ -2,8 +2,8 @@ use crate::{
     ast::{
         ArrayExpr, ArrayGetExpr, ArraySetStmt, BinaryExpr, CallExpr, CastExpr, ControlFlowType,
         CtrlStmt, ElseStmt, Expression, FnStmt, ForStmt, GetExpr, GroupingExpr, IfStmt,
-        IncludeStmt, LiteralExpr, SetStmt, Statement, StructStmt, ThisExpr, UnaryExpr,
-        VarExpr, VarStmt, WhileStmt,
+        IncludeStmt, LiteralExpr, SetStmt, Statement, StructStmt, ThisExpr, UnaryExpr, VarExpr,
+        VarStmt, WhileStmt,
     },
     errors,
     lexer::{Token, TokenType},
@@ -653,11 +653,17 @@ impl Parser {
 
             match self.get_optional_either_declaration(true) {
                 Some(mut res) => {
-                    if is_static{
-                        match res{
-                            Statement::Variable(ref mut v) => {v.is_static = true;},
-                            Statement::Struct(ref mut s) => {s.is_static = true;},
-                            Statement::Function(ref mut f) => {f.is_static = true;},
+                    if is_static {
+                        match res {
+                            Statement::Variable(ref mut v) => {
+                                v.is_static = true;
+                            }
+                            Statement::Struct(ref mut s) => {
+                                s.is_static = true;
+                            }
+                            Statement::Function(ref mut f) => {
+                                f.is_static = true;
+                            }
                             _ => {}
                         };
                     }

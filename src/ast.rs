@@ -401,7 +401,11 @@ pub struct VarStmt {
 
 impl VarStmt {
     pub fn new(name: Token, init: Expression) -> Self {
-        Self { name, init, is_static: false }
+        Self {
+            name,
+            init,
+            is_static: false,
+        }
     }
 }
 
@@ -416,12 +420,17 @@ pub struct FnStmt {
     pub name: Token,
     pub params: Vec<String>,
     pub body: Vec<Statement>,
-    pub is_static: bool
+    pub is_static: bool,
 }
 
 impl FnStmt {
     pub fn new(name: Token, params: Vec<String>, body: Vec<Statement>) -> Self {
-        Self { name, params, body, is_static: false }
+        Self {
+            name,
+            params,
+            body,
+            is_static: false,
+        }
     }
 }
 
@@ -435,12 +444,16 @@ impl From<FnStmt> for Statement {
 pub struct StructStmt {
     pub name: Token,
     pub methods: Vec<Statement>, // a subset of statements, corresponding only to declarations
-    pub is_static: bool
+    pub is_static: bool,
 }
 
 impl StructStmt {
     pub fn new(name: Token, methods: Vec<Statement>) -> Self {
-        Self { name, methods, is_static: false }
+        Self {
+            name,
+            methods,
+            is_static: false,
+        }
     }
 }
 
