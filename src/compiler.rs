@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap};
 
 use crate::{
     ast::{
@@ -277,6 +277,7 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
     fn visit_while_stmt(&mut self, expr: &crate::ast::WhileStmt) -> Self::Output {
         expr.accept(self.compiler)
     }
+
     fn visit_struct_stmt(&mut self, expr: &crate::ast::StructStmt) -> Self::Output {
         let name = expr.name.token_type.as_identifier().unwrap();
 
@@ -700,7 +701,18 @@ impl ExprVisitor for Compiler {
     }
 
     fn visit_array_expr(&mut self, expr: &crate::ast::ArrayExpr) -> Self::Output {
-        unimplemented!()
+        let exprs = &expr.exprs;
+
+        let mut arg_amount = 0;
+
+        for expr in exprs{
+            expr.accept(self)?;
+            arg_amount += 1;
+        }
+
+        self.get_cur_stack().push(OpCode::CaptureArray(arg_amount));
+
+        Ok(())
     }
 
     fn visit_unary_expr(&mut self, expr: &crate::ast::UnaryExpr) -> Self::Output {

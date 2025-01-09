@@ -345,6 +345,8 @@ pub enum OpCode {
     SetProp(String, Box<OpCode>),
     //these are for struct instances
 
+    CaptureArray(i32),
+
     Call(i32),
     This,
 
@@ -737,6 +739,21 @@ impl VirtualMachine {
             }
             OpCode::Jump(offset) => {
                 self.inc_ip(offset);
+            }
+            OpCode::CaptureArray(mut arg_count) => {
+                let mut array: Vec<Immediate> = Vec::new();
+
+                while arg_count > 0{
+                    array.push(self.stack.pop()
+                        .unwrap()
+                    );
+
+                    arg_count -= 1;
+                }
+
+                array.reverse();
+
+                self.stack.push(Immediate::Array(array));
             }
             OpCode::Call(params_num) => {
                 self.call_function(params_num as usize)?;

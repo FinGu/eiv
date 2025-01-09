@@ -783,6 +783,18 @@ where
     }
 }
 
+impl<Visitor, T> Accept<Visitor> for ArrayExpr
+where
+    Visitor: ExprVisitor<Output = T>,
+{
+    type Output = T;
+
+    fn accept(&self, visitor: &mut Visitor) -> Self::Output {
+        visitor.visit_array_expr(self)
+    }
+}
+
+
 impl<Visitor, T> Accept<Visitor> for VarStmt
 where
     Visitor: StmtVisitor<Output = T>,
@@ -899,6 +911,7 @@ where
             Expression::Cast(ref cast) => cast.accept(visitor),
             Expression::Get(ref get) => get.accept(visitor),
             Expression::This(ref this) => this.accept(visitor),
+            Expression::Array(ref arr) => arr.accept(visitor),
             _ => unimplemented!(),
         }
     }
