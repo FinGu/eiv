@@ -1,0 +1,17 @@
+struct = {
+    constructor = (d){
+        this.value = d;
+    }
+
+    default_constructor = (){
+        return struct(5)
+    }
+}
+
+inst = struct(10)
+
+println(inst.value)
+
+new_inst = inst.default_constructor()
+
+println(new_inst.value)

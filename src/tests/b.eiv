@@ -1,1 +1,19 @@
-include "string.eiv";a = 5 * 12;println(a);a = string("abc");println(a);loop = (n){if n > 5{println(string("sim"));} else{println(string("nao"));}};loop(7);
+include "string.eiv"
+
+a = 5 * 12
+
+println(a)
+
+a = string("abc")
+
+println(a)
+
+loop = (string_class, n){
+    if n > 5{
+        println(string_class("sim"));
+    } else{
+        println(string_class("nao"));
+    }
+}
+
+loop(string, 7)

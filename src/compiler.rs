@@ -1,12 +1,10 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, fs};
 
 use crate::{
     ast::{
         Accept, ControlFlowType, ElseStmt, ExprVisitor, FnStmt, LiteralExpr, Statement,
-        StmtVisitor, VarExpr,
-    },
-    lexer::TokenType,
-    vm::{Immediate, OpCode},
+        StmtVisitor, 
+    }, errors, lexer::{Lexer, TokenType}, parser::Parser, vm::{Immediate, OpCode}
 };
 
 #[derive(Clone, Debug, Default)]
@@ -190,6 +188,8 @@ impl LoopContext {
 }
 
 pub struct Compiler {
+    cur_struct_name: String,
+
     cur_func: Function,
 
     pub symbol_table: SymbolTable,
@@ -202,6 +202,7 @@ pub struct Compiler {
 impl Compiler {
     pub fn new(symbol_table: SymbolTable) -> Self {
         Self {
+            cur_struct_name: String::new(),
             cur_func: Function::default(),
             symbol_table,
             loop_ctx: LoopContext::default(),
@@ -247,12 +248,13 @@ impl Compiler {
 }
 
 pub struct StructCompiler<'a> {
+    name: &'a str,
     compiler: &'a mut Compiler,
 }
 
 impl<'a> StructCompiler<'a> {
-    pub fn new(compiler: &'a mut Compiler) -> Self {
-        Self { compiler }
+    pub fn new(name: &'a str, compiler: &'a mut Compiler) -> Self {
+        Self { name, compiler }
     }
 }
 
@@ -262,20 +264,25 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
     fn visit_set_stmt(&mut self, expr: &crate::ast::SetStmt) -> Self::Output {
         expr.accept(self.compiler)
     }
-    fn visit_if_stmt(&mut self, expr: &crate::ast::IfStmt) -> Self::Output {
-        expr.accept(self.compiler)
+    
+    fn visit_if_stmt(&mut self, _: &crate::ast::IfStmt) -> Self::Output {
+        unreachable!()
     }
-    fn visit_for_stmt(&mut self, expr: &crate::ast::ForStmt) -> Self::Output {
-        expr.accept(self.compiler)
+
+    fn visit_for_stmt(&mut self, _: &crate::ast::ForStmt) -> Self::Output {
+        unreachable!()
     }
-    fn visit_ctrl_stmt(&mut self, expr: &crate::ast::CtrlStmt) -> Self::Output {
-        expr.accept(self.compiler)
+
+    fn visit_ctrl_stmt(&mut self, _: &crate::ast::CtrlStmt) -> Self::Output {
+        unreachable!()
     }
-    fn visit_block_stmt(&mut self, expr: &crate::ast::BlockStmt) -> Self::Output {
-        expr.accept(self.compiler)
+
+    fn visit_block_stmt(&mut self, _: &crate::ast::BlockStmt) -> Self::Output {
+        unreachable!()
     }
-    fn visit_while_stmt(&mut self, expr: &crate::ast::WhileStmt) -> Self::Output {
-        expr.accept(self.compiler)
+
+    fn visit_while_stmt(&mut self, _: &crate::ast::WhileStmt) -> Self::Output {
+        unreachable!()
     }
 
     fn visit_struct_stmt(&mut self, expr: &crate::ast::StructStmt) -> Self::Output {
@@ -286,7 +293,7 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
             ..Default::default()
         });
 
-        let name = expr.name.token_type.as_identifier().unwrap();
+        self.compiler.symbol_table.mark(name.clone());
 
         self.compiler
             .get_cur_stack()
@@ -310,7 +317,7 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
                 .push(OpCode::GetStructVar(name.clone()));
         }
 
-        let mut struct_compiler = StructCompiler::new(self.compiler);
+        let mut struct_compiler = StructCompiler::new(name, self.compiler);
 
         let methods = &expr.methods; //methods isn't accurate
 
@@ -322,8 +329,9 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
 
         Ok(())
     }
+
     fn visit_include_stmt(&mut self, expr: &crate::ast::IncludeStmt) -> Self::Output {
-        todo!()
+        expr.accept(self.compiler)
     }
 
     fn visit_variable_stmt(&mut self, expr: &crate::ast::VarStmt) -> Self::Output {
@@ -354,6 +362,12 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
         }
 
         let mut new_compiler = Compiler::new(new_sym_table);
+        new_compiler.cur_struct_name = self.name.to_string();
+
+        //this is a trick in order to recognize if someone's trying to construct an instance of a
+        //struct inside itself, such as:
+        //a = { fun = (){ return a() } }
+        //a_inst.fun() SHOULD return a new instance of a
 
         if name == "constructor" {
             new_compiler.is_constructor = true;
@@ -365,9 +379,9 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
 
         self.compiler
             .get_cur_stack()
-            .push(OpCode::Constant(Immediate::Function(
+            .push(OpCode::Constant(
                 compiled_result.into(),
-            )));
+            ));
 
         self.compiler.get_cur_stack().push(if expr.is_static {
             OpCode::SetStaticStructVar(name.clone())
@@ -578,7 +592,7 @@ impl StmtVisitor for Compiler {
 
         self.get_cur_stack().push(OpCode::GetLocal(local as i32));
 
-        let mut struct_compiler = StructCompiler::new(self);
+        let mut struct_compiler = StructCompiler::new(name, self);
 
         let methods = &expr.methods; //methods isn't accurate
 
@@ -590,8 +604,48 @@ impl StmtVisitor for Compiler {
 
         Ok(())
     }
+
     fn visit_include_stmt(&mut self, expr: &crate::ast::IncludeStmt) -> Self::Output {
-        unimplemented!()
+        let name = &expr.file;
+
+        let inner = match fs::read_to_string(name){
+            Ok(var) => var,
+            Err(_) => {
+                return Err(CompilerError::InvalidFile);
+            }
+        };
+
+        let mut scanner = Lexer::new(inner);
+
+        let tokens = scanner.work();
+
+        errors::LIST.lock().unwrap().report();
+
+        let mut parser = Parser::new(tokens, name.clone());
+
+        let statements = parser.work();
+
+        errors::LIST.lock().unwrap().report();
+
+        let old_symbol_table = self.symbol_table.clone();
+
+        let mut comp = Compiler::new(old_symbol_table);
+
+        let result = comp.work(statements).unwrap();
+        
+        let cur_stack = self.get_cur_stack();
+
+        let code = result.code;
+
+        let len = code.len();
+
+        cur_stack.extend(code.into_iter().take(len - 2));
+
+        self.symbol_table = comp.symbol_table;
+        //the idea behind is compile it as function, and remove the two last arguments, that are
+        //nop and return
+
+        Ok(())
     }
 
     fn visit_variable_stmt(&mut self, expr: &crate::ast::VarStmt) -> Self::Output {
@@ -628,9 +682,9 @@ impl StmtVisitor for Compiler {
         let local = self.symbol_table.mark(name.clone());
 
         self.get_cur_stack()
-            .push(OpCode::Constant(Immediate::Function(
+            .push(OpCode::Constant(
                 compiled_result.into(),
-            )));
+            ));
 
         self.get_cur_stack().push(OpCode::SetLocal(local as i32));
 
@@ -768,6 +822,11 @@ impl ExprVisitor for Compiler {
     fn visit_variable_expr(&mut self, expr: &crate::ast::VarExpr) -> Self::Output {
         let name = expr.name.token_type.as_identifier().unwrap().clone();
 
+        if name == self.cur_struct_name{
+            self.get_cur_stack().push(OpCode::ConstructThis);
+            return Ok(());
+        }
+
         let local = self.symbol_table.resolve(&name);
 
         if let Some(resolved) = local {
@@ -796,6 +855,8 @@ pub enum CompilerError {
     Generic,
     #[error("Unresolved symbol")]
     UnresolvedSymbol,
+    #[error("Not a valid file to include")]
+    InvalidFile,
 }
 
 pub type CompilerResult<T> = Result<T, CompilerError>;

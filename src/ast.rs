@@ -750,6 +750,18 @@ where
     }
 }
 
+impl<Visitor, T> Accept<Visitor> for IncludeStmt 
+where
+    Visitor: StmtVisitor<Output = T>,
+{
+    type Output = T;
+
+    fn accept(&self, visitor: &mut Visitor) -> Self::Output {
+        visitor.visit_include_stmt(self)
+    }
+}
+
+
 impl<Visitor, T> Accept<Visitor> for VarExpr
 where
     Visitor: ExprVisitor<Output = T>,
@@ -959,6 +971,7 @@ where
             Statement::Struct(ref strct) => strct.accept(visitor),
             Statement::Set(ref set) => set.accept(visitor),
             Statement::ArraySet(ref arrset) => arrset.accept(visitor),
+            Statement::Include(ref incl) => incl.accept(visitor),
             _ => unimplemented!(),
         }
     }

@@ -3,7 +3,7 @@ use crate::{
     errors,
     lexer::Lexer,
     parser::Parser,
-    vm::{OpCode, VirtualMachine, VirtualMachineError},
+    vm::VirtualMachine,
 };
 
 pub fn run_interpreter(

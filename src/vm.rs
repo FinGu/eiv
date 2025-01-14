@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::fmt::{Debug, Display};
 use std::{
     cell::RefCell,
@@ -96,6 +95,12 @@ impl From<StructInst> for Immediate {
 impl From<Vec<Immediate>> for Immediate{
     fn from(value: Vec<Immediate>) -> Self {
         Self::Array(RefCell::new(value).into())
+    }
+}
+
+impl From<Function> for Immediate{
+    fn from(value: Function) -> Self {
+        Self::Function(value.into())
     }
 }
 
@@ -380,7 +385,9 @@ pub enum OpCode {
     CaptureArray(i32),
 
     Call(i32),
+
     This,
+    ConstructThis,
 
     Constant(Immediate),
 
@@ -836,6 +843,21 @@ impl VirtualMachine {
                         .clone()
                         .unwrap_or(Immediate::Null),
                 );
+            },
+            OpCode::ConstructThis => {
+                let raw_instance = self.get_cur_call_frame().
+                    instance
+                    .clone()
+                    .unwrap_or(Immediate::Null);
+
+                let cur_instance = raw_instance
+                    .as_struct_inst()
+                    .unwrap()
+                    .as_ref()
+                    .borrow();
+
+                self.stack.push(Immediate::StructDef(cur_instance.from.clone()));
+
             }
             OpCode::Nop => {}
             _ => unimplemented!(),
@@ -846,7 +868,7 @@ impl VirtualMachine {
     pub fn work(&mut self, function: Rc<Function>) -> VMResult<()> {
         self.setup_call_frame(function);
 
-        println!("{:?}", self.get_cur_code());
+        //println!("{:?}", self.get_cur_code());
 
         while let Some(el) = self.next_instr() {
             //println!("IP: {}, Executing: {:?} with last stack value: {:?}", self.get_ip()-1, el, self.stack.last());
