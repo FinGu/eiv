@@ -379,7 +379,7 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
     }
 
     fn visit_array_set_stmt(&mut self, expr: &crate::ast::ArraySetStmt) -> Self::Output {
-        todo!()
+        expr.accept(self.compiler)
     }
 
     fn visit_expression_stmt(&mut self, expr: &crate::ast::ExprStmt) -> Self::Output {
@@ -638,7 +638,15 @@ impl StmtVisitor for Compiler {
     }
 
     fn visit_array_set_stmt(&mut self, expr: &crate::ast::ArraySetStmt) -> Self::Output {
-        unimplemented!()
+        expr.rvalue.accept(self)?;
+
+        expr.callee.accept(self)?;
+
+        expr.argument.accept(self)?;
+
+        self.get_cur_stack().push(OpCode::SetArrayIndex);
+
+        Ok(())
     }
 }
 
@@ -773,7 +781,13 @@ impl ExprVisitor for Compiler {
     }
 
     fn visit_array_get_expr(&mut self, expr: &crate::ast::ArrayGetExpr) -> Self::Output {
-        unimplemented!()
+        expr.callee.accept(self)?;
+
+        expr.argument.accept(self)?;
+        
+        self.get_cur_stack().push(OpCode::GetArrayIndex);
+
+        Ok(())
     }
 }
 #[derive(thiserror::Error, Debug)]

@@ -794,6 +794,17 @@ where
     }
 }
 
+impl<Visitor, T> Accept<Visitor> for ArrayGetExpr 
+where
+    Visitor: ExprVisitor<Output = T>,
+{
+    type Output = T;
+
+    fn accept(&self, visitor: &mut Visitor) -> Self::Output {
+        visitor.visit_array_get_expr(self)
+    }
+}
+
 
 impl<Visitor, T> Accept<Visitor> for VarStmt
 where
@@ -803,6 +814,17 @@ where
 
     fn accept(&self, visitor: &mut Visitor) -> Self::Output {
         visitor.visit_variable_stmt(self)
+    }
+}
+
+impl<Visitor, T> Accept<Visitor> for ArraySetStmt
+where
+    Visitor: StmtVisitor<Output = T>,
+{
+    type Output = T;
+
+    fn accept(&self, visitor: &mut Visitor) -> Self::Output {
+        visitor.visit_array_set_stmt(self)
     }
 }
 
@@ -912,6 +934,7 @@ where
             Expression::Get(ref get) => get.accept(visitor),
             Expression::This(ref this) => this.accept(visitor),
             Expression::Array(ref arr) => arr.accept(visitor),
+            Expression::ArrayGet(ref arrget) => arrget.accept(visitor),
             _ => unimplemented!(),
         }
     }
@@ -935,6 +958,7 @@ where
             Statement::ControlFlow(ref cflow) => cflow.accept(visitor),
             Statement::Struct(ref strct) => strct.accept(visitor),
             Statement::Set(ref set) => set.accept(visitor),
+            Statement::ArraySet(ref arrset) => arrset.accept(visitor),
             _ => unimplemented!(),
         }
     }

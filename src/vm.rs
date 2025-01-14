@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::fmt::{Debug, Display};
 use std::{
     cell::RefCell,
@@ -15,6 +16,7 @@ use crate::{
 
 type WrappedStructDef = Rc<RefCell<StructDef>>;
 type WrappedStructInst = Rc<RefCell<StructInst>>;
+type WrappedVec = Rc<RefCell<Vec<Immediate>>>;
 
 #[derive(Clone, Debug)]
 pub struct StructInst {
@@ -76,9 +78,9 @@ pub enum Immediate {
     Number(f64),
     Char(u8),
     Boolean(bool),
-    Array(Vec<Immediate>),
     Function(Rc<Function>),
     GlobalFunction(Box<dyn Callable>),
+    Array(WrappedVec),
     StructDef(WrappedStructDef),
     StructInst(WrappedStructInst),
     BoundFunction(BoundFunction),
@@ -87,7 +89,13 @@ pub enum Immediate {
 
 impl From<StructInst> for Immediate {
     fn from(value: StructInst) -> Self {
-        Immediate::StructInst(RefCell::new(value).into())
+        Self::StructInst(RefCell::new(value).into())
+    }
+}
+
+impl From<Vec<Immediate>> for Immediate{
+    fn from(value: Vec<Immediate>) -> Self {
+        Self::Array(RefCell::new(value).into())
     }
 }
 
@@ -96,7 +104,25 @@ impl Display for Immediate {
         match self {
             Self::Number(num) => write!(f, "{}", num),
             Self::Char(chr) => write!(f, "{}", *chr as char),
-            Self::Array(arr) => write!(f, "{:?}", arr),
+            Self::Array(arrn) => {
+                let arr = arrn.as_ref().borrow();
+
+                let mut print_comma = false;
+
+                write!(f, "[")?;
+
+                for el in arr.iter(){
+                    if print_comma{
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", el)?;
+
+                    print_comma = true;
+                }
+
+                write!(f, "]")
+            },
             Self::Boolean(b) => write!(f, "{}", if *b { "true" } else { "false" }),
             Self::Null => write!(f, "null"),
             Self::StructInst(inst) => write!(
@@ -130,12 +156,6 @@ impl From<bool> for Immediate {
     }
 }
 
-impl From<Vec<Immediate>> for Immediate {
-    fn from(value: Vec<Immediate>) -> Self {
-        Self::Array(value)
-    }
-}
-
 impl PartialOrd for Immediate {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match (self, other) {
@@ -143,7 +163,10 @@ impl PartialOrd for Immediate {
             (Self::Number(n1), Self::Number(n2)) => n1.partial_cmp(n2),
             (Self::Char(c1), Self::Char(c2)) => c1.partial_cmp(c2),
             (Self::Boolean(b1), Self::Boolean(b2)) => b1.partial_cmp(b2),
-            (Self::Array(arr1), Self::Array(arr2)) => {
+            (Self::Array(arr1n), Self::Array(arr2n)) => {
+                let arr1 = arr1n.as_ref().borrow();
+                let arr2 = arr2n.as_ref().borrow();
+
                 if arr1.len() != arr2.len() {
                     return arr1.len().partial_cmp(&arr2.len());
                 }
@@ -175,7 +198,10 @@ impl PartialEq for Immediate {
             (Self::Null, Self::Null) => true,
             (Self::Number(n1), Self::Number(n2)) => n1 == n2,
             (Self::Char(c1), Self::Char(c2)) => c1 == c2,
-            (Self::Array(arr1), Self::Array(arr2)) => {
+            (Self::Array(arr1n), Self::Array(arr2n)) => {
+                let arr1 = arr1n.as_ref().borrow();
+                let arr2 = arr2n.as_ref().borrow();
+
                 arr1.iter()
                     .zip(arr2.iter())
                     .filter(|&(a, b)| a == b)
@@ -193,8 +219,9 @@ impl Add for Immediate {
     fn add(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
             (Self::Number(l), Self::Number(r)) => Self::Number(l + r),
-            (Self::Array(mut arr), r) => Self::Array({
-                arr.push(r);
+            (Self::Array(arr), r) => Self::Array({
+                arr.as_ref().borrow_mut().push(r);
+
                 arr
             }),
             _ => Self::Number({ f64::NAN }),
@@ -230,7 +257,9 @@ impl Mul for Immediate {
         match (self, rhs) {
             (Self::Number(l), Self::Number(r)) => Self::Number(l * r),
             (Self::Char(l), Self::Number(r)) => {
-                Self::Array({ (0..r as usize).map(|_| l.into()).collect() })
+                let repeated = (0..r as usize).map(|_| l.into()).collect();
+
+                Self::Array(RefCell::new(repeated).into())
             }
             (Self::Array(_l), Self::Number(_r)) => Self::Array({
                 //maybe later
@@ -245,7 +274,7 @@ impl From<Vec<u8>> for Immediate {
     fn from(value: Vec<u8>) -> Self {
         let new_vec = value.iter().map(|el| Self::Char(*el)).collect();
 
-        Self::Array(new_vec)
+        Self::Array(RefCell::new(new_vec).into())
     }
 }
 
@@ -330,6 +359,9 @@ pub enum OpCode {
 
     SetLocal(i32),
     GetLocal(i32),
+
+    GetArrayIndex,
+    SetArrayIndex,
 
     SetStructVar(String),
     SetStaticStructVar(String),
@@ -753,7 +785,46 @@ impl VirtualMachine {
 
                 array.reverse();
 
-                self.stack.push(Immediate::Array(array));
+                self.stack.push(array.into());
+            },
+            OpCode::GetArrayIndex => {
+                let argument = self.stack.pop().unwrap(); 
+                let callee = self.stack.pop().unwrap();
+
+                match callee{
+                    Immediate::Array(arrn) => {
+                        let arr = arrn.as_ref().borrow();
+
+                        let len = arr.len() as i32;
+
+                        let Some(index) = argument.as_index(len) else{
+                            return Err(VirtualMachineError::InvalidIndex);
+                        };
+
+                        self.stack.push(arr[index].clone());
+                    },
+                    _ => return Err(VirtualMachineError::NotAnArray)
+                }
+            },
+            OpCode::SetArrayIndex=> {
+                let argument = self.stack.pop().unwrap(); 
+                let callee = self.stack.pop().unwrap();
+                let rvalue = self.stack.pop().unwrap();
+
+                match callee{
+                    Immediate::Array(arrn) => {
+                        let mut arr = arrn.as_ref().borrow_mut();
+
+                        let len = arr.len() as i32;
+
+                        let Some(index) = argument.as_index(len) else{
+                            return Err(VirtualMachineError::InvalidIndex);
+                        };
+
+                        arr[index] = rvalue;
+                    },
+                    _ => return Err(VirtualMachineError::NotAnArray)
+                }
             }
             OpCode::Call(params_num) => {
                 self.call_function(params_num as usize)?;
@@ -804,6 +875,10 @@ pub enum VirtualMachineError {
     BadStructuredStruct,
     #[error("Constructor isn't a method")]
     ConstructorNotMethod,
+    #[error("What is being indexed isn't an array")]
+    NotAnArray,
+    #[error("Invalid index")]
+    InvalidIndex
 }
 
 pub type VMResult<T> = Result<T, VirtualMachineError>;
