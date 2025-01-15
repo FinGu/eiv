@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::fmt::{Debug, Display};
 use std::{
     cell::RefCell,
@@ -667,7 +668,11 @@ impl VirtualMachine {
             OpCode::SetLocal(pos) => {
                 let last = self.stack.last().unwrap();
 
-                self.set_local(pos, last.clone());
+                self.set_local(pos, if let Immediate::Array(ref arr) = last{
+                    arr.as_ref().borrow().clone().into()
+                } else{
+                    last.clone()
+                });
             }
             OpCode::GetGlobal(name) => {
                 let global = self.globals.get(&name).cloned().unwrap_or(Immediate::Null);
@@ -868,7 +873,7 @@ impl VirtualMachine {
     pub fn work(&mut self, function: Rc<Function>) -> VMResult<()> {
         self.setup_call_frame(function);
 
-        //println!("{:?}", self.get_cur_code());
+        println!("{:?}", self.get_cur_code());
 
         while let Some(el) = self.next_instr() {
             //println!("IP: {}, Executing: {:?} with last stack value: {:?}", self.get_ip()-1, el, self.stack.last());
