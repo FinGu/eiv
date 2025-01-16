@@ -1,0 +1,13 @@
+arr = {
+    constructor = (arg){
+        this.array = arg
+    }
+
+    _display_ = (){
+        print(this.array.length)
+    }
+}
+
+inst = arr([1,2,3])
+
+println(inst)

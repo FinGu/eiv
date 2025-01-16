@@ -1,6 +1,6 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, io::Write};
 
-use crate::vm::{Immediate, VMResult, VirtualMachine};
+use crate::{prelude, vm::{Immediate, VMResult, VirtualMachine, VirtualMachineError}};
 
 pub trait Callable: Sync + Send {
     fn arity(&self) -> usize;
@@ -38,8 +38,35 @@ impl Callable for Print {
 
     fn call(&self, vm: &mut VirtualMachine, params_len: usize) -> VMResult<()> {
         for _ in 0..params_len {
-            print!("{}", vm.stack.pop().unwrap());
+            let value = vm.stack.pop().unwrap();
+
+            if let Immediate::StructInst(ref inst) = value{
+                let display = inst.as_ref().borrow().get("_display_");
+
+                if display == Immediate::Null || !display.is_function(){
+                    print!("{}", Immediate::Null);
+                    continue;
+                } 
+
+                let mut temp_vm = VirtualMachine::new();
+
+                prelude::include(&mut temp_vm);
+
+                let ufunc = display.as_function().unwrap().clone();
+
+                temp_vm.setup_call_frame(ufunc);
+
+                let len = temp_vm.call_frames.len();
+                temp_vm.call_frames[len-1].instance = Some(value);
+
+                temp_vm.work(None)?;
+
+                continue;
+            }
+
+            print!("{}", value);
         }
+
         Ok(())
     }
 

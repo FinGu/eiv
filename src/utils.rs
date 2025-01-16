@@ -28,7 +28,7 @@ pub fn run_interpreter(
 
     let result = comp.work(statements).unwrap();
 
-    match vm.work(result.into()) {
+    match vm.work(Some(result.into())) {
         Ok(_) => {}
         Err(e) => panic!("{}", e),
     }

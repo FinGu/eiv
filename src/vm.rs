@@ -53,7 +53,7 @@ impl StructInst {
 pub struct CallFrame {
     function: Rc<Function>,
 
-    instance: Option<Immediate>,
+    pub instance: Option<Immediate>,
 
     base: i32,
 
@@ -225,10 +225,18 @@ impl Add for Immediate {
     fn add(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
             (Self::Number(l), Self::Number(r)) => Self::Number(l + r),
-            (Self::Array(arr), r) => Self::Array({
-                arr.as_ref().borrow_mut().push(r);
+            (Self::Array(l), Self::Array(r)) => {
+                let left = l.as_ref().borrow();
+                let right = r.as_ref().borrow(); 
 
-                arr
+                [left.clone(), right.clone()].concat().into()
+            }
+            (Self::Array(arr), r) => Self::Array({
+                let mut new_arr = arr.as_ref().borrow().clone();
+
+                new_arr.push(r);
+
+                RefCell::new(new_arr).into()
             }),
             _ => Self::Number({ f64::NAN }),
         }
@@ -484,7 +492,7 @@ impl VirtualMachine {
         })
     }
 
-    fn raw_call(
+    pub fn raw_call(
         &mut self,
         function: Rc<Function>,
         params_num: usize,
@@ -496,7 +504,7 @@ impl VirtualMachine {
         }
 
         if instance.is_none() {
-            instance = self.get_cur_call_frame().instance.clone();
+            instance = self.get_cur_instance().clone();
         }
 
         let new_frame = CallFrame::new(Rc::clone(&function), 0, base as i32, instance);
@@ -509,9 +517,7 @@ impl VirtualMachine {
     fn call_function(&mut self, params_num: usize) -> VMResult<()> {
         let base = self.stack.len() - params_num - 1;
 
-        let func = &self.stack[base];
-
-        match func {
+        match &self.stack[base]{
             Immediate::Function(normal_func) => {
                 self.raw_call(normal_func.clone(), params_num, base, None)?;
             }
@@ -564,12 +570,16 @@ impl VirtualMachine {
         &self.get_cur_call_frame().function
     }
 
-    fn get_cur_call_frame(&self) -> &CallFrame {
+    pub fn get_cur_call_frame(&self) -> &CallFrame {
         self.call_frames.last().unwrap()
     }
 
     fn get_ip(&self) -> i32 {
         self.get_cur_call_frame().ip
+    }
+
+    pub fn get_cur_instance(&self) -> &Option<Immediate>{
+        &self.get_cur_call_frame().instance
     }
 
     fn inc_ip(&mut self, inc: i32) {
@@ -578,7 +588,7 @@ impl VirtualMachine {
         self.call_frames[target].ip += inc;
     }
 
-    fn setup_call_frame(&mut self, function: Rc<Function>) {
+    pub fn setup_call_frame(&mut self, function: Rc<Function>) {
         self.call_frames
             .push(CallFrame::new(function.clone(), 0, 0, None));
 
@@ -699,6 +709,13 @@ impl VirtualMachine {
                         };
 
                         self.stack.push(bound_data);
+                    },
+                    Immediate::Array(ref arr) => {
+                        self.stack.push(if name == "length"{
+                            Immediate::Number(arr.as_ref().borrow().len() as f64)
+                        } else{
+                            Immediate::Null
+                        });
                     }
                     _ => return Err(VirtualMachineError::GetNotInstance),
                 }
@@ -818,7 +835,7 @@ impl VirtualMachine {
                     _ => return Err(VirtualMachineError::NotAnArray)
                 }
             },
-            OpCode::SetArrayIndex=> {
+            OpCode::SetArrayIndex => {
                 let argument = self.stack.pop().unwrap(); 
                 let callee = self.stack.pop().unwrap();
                 let rvalue = self.stack.pop().unwrap();
@@ -843,15 +860,13 @@ impl VirtualMachine {
             }
             OpCode::This => {
                 self.stack.push(
-                    self.get_cur_call_frame()
-                        .instance
+                    self.get_cur_instance()
                         .clone()
-                        .unwrap_or(Immediate::Null),
+                        .unwrap_or(Immediate::Null)
                 );
             },
             OpCode::ConstructThis => {
-                let raw_instance = self.get_cur_call_frame().
-                    instance
+                let raw_instance = self.get_cur_instance()
                     .clone()
                     .unwrap_or(Immediate::Null);
 
@@ -870,10 +885,12 @@ impl VirtualMachine {
         Ok(())
     }
 
-    pub fn work(&mut self, function: Rc<Function>) -> VMResult<()> {
-        self.setup_call_frame(function);
+    pub fn work(&mut self, function: Option<Rc<Function>>) -> VMResult<()> {
+        if let Some(func) = function{
+            self.setup_call_frame(func);
+        }
 
-        println!("{:?}", self.get_cur_code());
+        //println!("{:?}", self.get_cur_code());
 
         while let Some(el) = self.next_instr() {
             //println!("IP: {}, Executing: {:?} with last stack value: {:?}", self.get_ip()-1, el, self.stack.last());
@@ -905,7 +922,7 @@ pub enum VirtualMachineError {
     #[error("What is being indexed isn't an array")]
     NotAnArray,
     #[error("Invalid index")]
-    InvalidIndex
+    InvalidIndex,
 }
 
 pub type VMResult<T> = Result<T, VirtualMachineError>;
