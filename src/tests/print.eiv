@@ -4,7 +4,16 @@ arr = {
     }
 
     _display_ = (){
-        print(this.array.length)
+        first = true 
+
+        for i = 0; i < this.array.length; i += 1{
+            if !first{
+                print(',')
+            }
+
+            print(this.array[i])
+            first = false
+        }
     }
 }
 
