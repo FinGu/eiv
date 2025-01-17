@@ -5,9 +5,7 @@ use crate::{prelude, vm::{Immediate, VMResult, VirtualMachine, VirtualMachineErr
 pub trait Callable: Sync + Send {
     fn arity(&self) -> usize;
 
-    fn clone_box(&self) -> Box<dyn Callable>;
-
-    fn call(&self, vm: &mut VirtualMachine, params: usize) -> VMResult<()>;
+    fn call(&self, vm: &mut VirtualMachine, params: usize) -> VMResult<Immediate>;
 
     fn name(&self) -> String;
 }
@@ -15,12 +13,6 @@ pub trait Callable: Sync + Send {
 impl Debug for dyn Callable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Callable").finish()
-    }
-}
-
-impl Clone for Box<dyn Callable> {
-    fn clone(&self) -> Box<dyn Callable> {
-        self.clone_box()
     }
 }
 
@@ -36,15 +28,17 @@ impl Callable for Print {
         1
     }
 
-    fn call(&self, vm: &mut VirtualMachine, params_len: usize) -> VMResult<()> {
+    fn call(&self, vm: &mut VirtualMachine, params_len: usize) -> VMResult<Immediate> {
+        let mut values = vm.stack.iter().rev();
+
         for _ in 0..params_len {
-            let value = vm.stack.pop().unwrap();
+            let value = values.next().unwrap();
 
             if let Immediate::StructInst(ref inst) = value{
                 let display = inst.as_ref().borrow().get("_display_");
 
                 if display == Immediate::Null || !display.is_function(){
-                    print!("{}", Immediate::Null);
+                    print!("{}", value);
                     continue;
                 } 
 
@@ -60,7 +54,7 @@ impl Callable for Print {
                 temp_vm.call_frames
                     .last_mut()
                     .unwrap()
-                    .instance = Some(value);
+                    .instance = Some(value.clone());
 
                 temp_vm.work(None)?;
 
@@ -69,12 +63,8 @@ impl Callable for Print {
 
             print!("{}", value);
         }
-
-        Ok(())
-    }
-
-    fn clone_box(&self) -> Box<dyn Callable> {
-        Box::new(self.clone())
+        
+        Ok(Immediate::Null)
     }
 }
 
@@ -90,18 +80,49 @@ impl Callable for PrintLn {
         1
     }
 
-    fn call(&self, vm: &mut VirtualMachine, params_len: usize) -> VMResult<()> {
+    fn call(&self, vm: &mut VirtualMachine, params_len: usize) -> VMResult<Immediate> {
         let pr = Print;
 
         pr.call(vm, params_len)?;
 
         println!();
 
-        Ok(())
+        Ok(Immediate::Null)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct _TypeOf;
+
+impl Callable for _TypeOf{
+    fn call(&self, vm: &mut VirtualMachine, _: usize) -> VMResult<Immediate> {
+        let arg = vm.stack.last().unwrap();
+
+        let result = match arg{
+            Immediate::Null => "null",
+            Immediate::Char(_) => "char",
+            Immediate::Array(_) => "array",
+            Immediate::Number(_) => "number",
+            Immediate::Boolean(_) => "bool",
+            Immediate::Function(_) | Immediate::BoundFunction(_) => "function",
+            Immediate::GlobalFunction(_) => "global_function",
+            Immediate::StructDef(_) => "struct_definition",
+            Immediate::StructInst(_) => "struct_instance",
+        };
+
+        let mut out_vec = Vec::new();
+
+        result.chars().for_each(|e| out_vec.push(Immediate::Char(e as u8)));
+
+        Ok(out_vec.into())
     }
 
-    fn clone_box(&self) -> Box<dyn Callable> {
-        Box::new(self.clone())
+    fn name(&self) -> String {
+        "_typeof".into()
+    }
+
+    fn arity(&self) -> usize {
+        1
     }
 }
 
@@ -117,7 +138,7 @@ fn include_from(dest_vm: &mut VirtualMachine, source_vm: &VirtualMachine){
 }
 
 pub fn include(vm: &mut VirtualMachine) {
-    let gfuncs: Vec<Rc<dyn Callable>> = vec![Rc::new(Print), Rc::new(PrintLn)];
+    let gfuncs: Vec<Rc<dyn Callable>> = vec![Rc::new(Print), Rc::new(PrintLn), Rc::new(_TypeOf)];
 
     gfuncs.into_iter().for_each(|each| insert(vm, each));
 }

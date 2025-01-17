@@ -122,7 +122,10 @@ impl Display for Immediate {
                         write!(f, ", ")?;
                     }
 
-                    write!(f, "{}", el)?;
+                    match el{
+                        Immediate::Char(_) => write!(f, "'{}'", el)?,
+                        _ => write!(f, "{}", el)?
+                    }
 
                     print_comma = true;
                 }
@@ -522,7 +525,11 @@ impl VirtualMachine {
                 self.raw_call(normal_func.clone(), params_num, base, None)?;
             }
             Immediate::GlobalFunction(global_func) => {
-                global_func.clone().call(self, params_num)?;
+                let result = global_func.clone().call(self, params_num)?;
+
+                self.stack.truncate(base);
+
+                self.stack.push(result);
             }
             Immediate::StructDef(sdef) => {
                 let new_inst = StructInst::new(sdef.clone());
