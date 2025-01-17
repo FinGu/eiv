@@ -79,7 +79,7 @@ pub enum Immediate {
     Char(u8),
     Boolean(bool),
     Function(Rc<Function>),
-    GlobalFunction(Box<dyn Callable>),
+    GlobalFunction(Rc<dyn Callable>),
     Array(WrappedVec),
     StructDef(WrappedStructDef),
     StructInst(WrappedStructInst),
@@ -880,7 +880,9 @@ impl VirtualMachine {
 
             }
             OpCode::Nop => {}
-            _ => unimplemented!(),
+            _ => {
+                unimplemented!()
+            },
         }
         Ok(())
     }

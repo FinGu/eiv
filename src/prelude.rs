@@ -1,4 +1,4 @@
-use std::{fmt::Debug, io::Write};
+use std::{fmt::Debug, io::Write, rc::Rc};
 
 use crate::{prelude, vm::{Immediate, VMResult, VirtualMachine, VirtualMachineError}};
 
@@ -50,14 +50,17 @@ impl Callable for Print {
 
                 let mut temp_vm = VirtualMachine::new();
 
-                prelude::include(&mut temp_vm);
+                prelude::include(&mut temp_vm); 
+                // this is so inefficient it's not even funny
 
                 let ufunc = display.as_function().unwrap().clone();
 
                 temp_vm.setup_call_frame(ufunc);
 
-                let len = temp_vm.call_frames.len();
-                temp_vm.call_frames[len-1].instance = Some(value);
+                temp_vm.call_frames
+                    .last_mut()
+                    .unwrap()
+                    .instance = Some(value);
 
                 temp_vm.work(None)?;
 
@@ -102,13 +105,13 @@ impl Callable for PrintLn {
     }
 }
 
-fn insert(vm: &mut VirtualMachine, callable: Box<dyn Callable>) {
+fn insert(vm: &mut VirtualMachine, callable: Rc<dyn Callable>) {
     vm.globals
         .insert(callable.name(), Immediate::GlobalFunction(callable));
 }
 
 pub fn include(vm: &mut VirtualMachine) {
-    let gfuncs: Vec<Box<dyn Callable>> = vec![Box::new(Print), Box::new(PrintLn)];
+    let gfuncs: Vec<Rc<dyn Callable>> = vec![Rc::new(Print), Rc::new(PrintLn)];
 
     gfuncs.into_iter().for_each(|each| insert(vm, each));
 }
