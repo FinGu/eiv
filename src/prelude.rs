@@ -50,7 +50,7 @@ impl Callable for Print {
 
                 let mut temp_vm = VirtualMachine::new();
 
-                prelude::include(&mut temp_vm); 
+                prelude::include_from(&mut temp_vm, vm); 
                 // this is so inefficient it's not even funny
 
                 let ufunc = display.as_function().unwrap().clone();
@@ -108,6 +108,12 @@ impl Callable for PrintLn {
 fn insert(vm: &mut VirtualMachine, callable: Rc<dyn Callable>) {
     vm.globals
         .insert(callable.name(), Immediate::GlobalFunction(callable));
+}
+
+fn include_from(dest_vm: &mut VirtualMachine, source_vm: &VirtualMachine){
+    source_vm.globals.iter().for_each(|(name, value)| {
+        dest_vm.globals.insert(name.clone(), value.clone());
+    });
 }
 
 pub fn include(vm: &mut VirtualMachine) {
