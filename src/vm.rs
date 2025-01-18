@@ -387,7 +387,6 @@ pub enum OpCode {
     //these are for struct defs
 
     GetGlobal(String),
-    SetGlobal(String),
 
     GetProp(String),
     GetStaticProp(String),
@@ -696,11 +695,6 @@ impl VirtualMachine {
 
                 self.stack.push(global);
             }
-            OpCode::SetGlobal(name) => {
-                let last = self.stack.pop().unwrap();
-
-                self.globals.insert(name, last);
-            }
             OpCode::GetProp(name) => {
                 let last = self.stack.pop().unwrap();
 
@@ -775,7 +769,20 @@ impl VirtualMachine {
                     }
                     _ => return Err(VirtualMachineError::BadStructuredStruct),
                 }
-            }
+            },
+            OpCode::GetStaticStructVar(name) => {
+                let sstruct = self.stack.last().unwrap();
+
+                match sstruct{
+                    Immediate::StructDef(sdef) => {
+                        let value = sdef.as_ref().borrow().get_static(&name);
+
+                        self.stack.push(value);
+                    },
+                    _ => return Err(VirtualMachineError::BadStructuredStruct)
+                }
+
+            },
             OpCode::SetStructVar(name) => {
                 let to_set = self.stack.pop().unwrap();
                 let sstruct = self.stack.last().unwrap();
@@ -797,7 +804,7 @@ impl VirtualMachine {
                     }
                     _ => return Err(VirtualMachineError::BadStructuredStruct),
                 }
-            }
+            },
             OpCode::JumpIfFalse(offset) => {
                 if let Some(Immediate::Boolean(cond)) = self.stack.last() {
                     if !cond {
@@ -912,8 +919,6 @@ impl VirtualMachine {
 
 #[derive(thiserror::Error, Debug)]
 pub enum VirtualMachineError {
-    #[error("Generic error")]
-    Generic,
     #[error("Invalid input for a binary op")]
     InvalidInpBinaryOp,
     #[error("Invalid number of parameters")]

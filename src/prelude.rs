@@ -24,8 +24,8 @@ impl Callable for Print {
         "print".to_owned()
     }
 
-    fn arity(&self) -> usize {
-        1
+    fn arity(&self) -> usize { // we don't care
+        0
     }
 
     fn call(&self, vm: &mut VirtualMachine, params_len: usize) -> VMResult<Immediate> {

@@ -1,7 +1,11 @@
 include "string.eiv"
 
 struct_def = {
-    constructor = (){
+    constructor = (string){ 
+        // i might allow structs to be declared global if the need ever arises
+
+        this.str_def = string
+
         println(string("abc"))
     }
 
@@ -9,7 +13,7 @@ struct_def = {
         stat obj = 5
     }
 
-    stat fun = (){
+    stat fun = (string){
         println(string("hello"))
     }
 
@@ -20,11 +24,11 @@ struct_def = {
     stat bruh = 5
 }
 
-struct_def::fun()
+struct_def::fun(string)
 
 struct_def::test(string("jfadklsj"))
 
-dfg = struct_def()
+dfg = struct_def(string)
 
 dfg.a = 123
 
