@@ -29,11 +29,10 @@ impl Callable for Print {
     }
 
     fn call(&self, vm: &mut VirtualMachine, params_len: usize) -> VMResult<Immediate> {
-        let mut values = vm.stack.iter().rev();
+        let len = vm.stack.len();
+        let window = &vm.stack[len - params_len..]; 
 
-        for _ in 0..params_len {
-            let value = values.next().unwrap();
-
+        for value in window.iter().take(params_len){
             if let Immediate::StructInst(ref inst) = value{
                 let display = inst.as_ref().borrow().get("_display_");
 
@@ -126,6 +125,35 @@ impl Callable for _TypeOf{
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct TypeOf;
+
+impl Callable for TypeOf{
+    fn call(&self, vm: &mut VirtualMachine, params: usize) -> VMResult<Immediate> {
+        let arg = vm.stack.last().unwrap();
+        
+        if let Immediate::StructInst(instance) = arg{
+            let uinstance = instance.as_ref().borrow();
+
+            if let Some(kind) = uinstance.data.get("_type_"){
+                return Ok(kind.clone());
+            }
+        }
+
+        let tpof = _TypeOf;
+
+        tpof.call(vm, params)
+    }
+
+    fn name(&self) -> String {
+        "typeof".into()
+    }
+
+    fn arity(&self) -> usize {
+        1
+    }
+}
+
 fn insert(vm: &mut VirtualMachine, callable: Rc<dyn Callable>) {
     vm.globals
         .insert(callable.name(), Immediate::GlobalFunction(callable));
@@ -138,7 +166,7 @@ fn include_from(dest_vm: &mut VirtualMachine, source_vm: &VirtualMachine){
 }
 
 pub fn include(vm: &mut VirtualMachine) {
-    let gfuncs: Vec<Rc<dyn Callable>> = vec![Rc::new(Print), Rc::new(PrintLn), Rc::new(_TypeOf)];
+    let gfuncs: Vec<Rc<dyn Callable>> = vec![Rc::new(Print), Rc::new(PrintLn), Rc::new(_TypeOf), Rc::new(TypeOf)];
 
     gfuncs.into_iter().for_each(|each| insert(vm, each));
 }

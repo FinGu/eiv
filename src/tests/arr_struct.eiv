@@ -1,4 +1,6 @@
 struct = {
+    _type_ = "cool_array"
+
     constructor = (value){
         this.value = value
     }
@@ -7,3 +9,5 @@ struct = {
 arr = [struct(1), struct(2), struct(3)]
 
 println(arr[0].value + arr[-1].value)
+
+println(typeof(arr[0]))
