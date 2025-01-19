@@ -9,6 +9,7 @@ use std::{
 
 use enum_as_inner::EnumAsInner;
 
+use crate::prelude;
 use crate::{
     compiler::{Function, StructDef},
     prelude::Callable,
@@ -187,7 +188,7 @@ impl PartialOrd for Immediate {
                     }
                 }
                 Some(std::cmp::Ordering::Equal)
-            }
+            },
             (Self::Null, _) => Some(std::cmp::Ordering::Less),
             (_, Self::Null) => Some(std::cmp::Ordering::Greater),
             (Self::Number(_), _) => Some(std::cmp::Ordering::Less),
@@ -469,6 +470,20 @@ impl VirtualMachine {
 
         let left = self.stack.pop().unwrap();
 
+        if let Immediate::StructInst(ref inst) = left{
+            if !kind.is_equal() && !kind.is_not_equal(){
+                return Err(VirtualMachineError::InvalidInpBinaryOp);
+            }
+
+            let uinst = inst.as_ref().borrow();
+
+            if let Some(Immediate::Function(eq)) = uinst.data.get("_eq_"){
+                return self.standalone_work(eq.clone(), left.clone(), Some(&[right]));
+            }
+            
+            return Err(VirtualMachineError::InvalidInpBinaryOp);
+        }
+
         Ok(match kind {
             OpCode::Add => left + right,
             OpCode::Subtract => left - right,
@@ -601,7 +616,7 @@ impl VirtualMachine {
         self.stack.push(Immediate::Function(function.clone()));
     }
 
-    pub fn execute_opcode(&mut self, op: OpCode) -> VMResult<()> {
+    pub fn execute_opcode(&mut self, op: OpCode) -> VMResult<Option<Immediate>> {
         match op {
             OpCode::Pop => {
                 self.stack.pop();
@@ -616,11 +631,13 @@ impl VirtualMachine {
                 if self.call_frames.is_empty() {
                     self.stack.pop();
 
-                    return Ok(());
+                    return Ok(popped_return);
                 }
 
                 if let Some(ret) = popped_return {
-                    self.stack.push(ret);
+                    self.stack.push(ret.clone());
+
+                    return Ok(Some(ret));
                 }
             }
             OpCode::Not => {
@@ -891,29 +908,54 @@ impl VirtualMachine {
                     .borrow();
 
                 self.stack.push(Immediate::StructDef(cur_instance.from.clone()));
-
             }
             OpCode::Nop => {}
             _ => {
                 unimplemented!()
             },
         }
-        Ok(())
+
+        Ok(None)
     }
 
-    pub fn work(&mut self, function: Option<Rc<Function>>) -> VMResult<()> {
-        if let Some(func) = function{
-            self.setup_call_frame(func);
+    pub fn work(&mut self, function: Option<Rc<Function>>) -> VMResult<Immediate> {
+        if let Some(ref func) = function{
+            self.setup_call_frame(func.clone());
         }
 
         //println!("{:?}", self.get_cur_code());
 
+        let mut last_stack_value = Immediate::Null;
+
         while let Some(el) = self.next_instr() {
             //println!("IP: {}, Executing: {:?} with last stack value: {:?}", self.get_ip()-1, el, self.stack.last());
-            self.execute_opcode(el)?;
+            
+            if let Some(val) = self.execute_opcode(el)?{
+                last_stack_value = val;
+            }
         }
 
-        Ok(())
+        Ok(last_stack_value)
+    }
+
+    pub fn standalone_work(&self, function: Rc<Function>, instance: Immediate, data_to_push: Option<&[Immediate]>) -> VMResult<Immediate>{
+        let mut temp_vm = VirtualMachine::new();
+
+        prelude::include_from(&mut temp_vm, self); 
+        // this is so inefficient it's not even funny
+
+        temp_vm.setup_call_frame(function);
+
+        temp_vm.call_frames
+            .last_mut()
+            .unwrap()
+            .instance = Some(instance);
+
+        if let Some(data) = data_to_push{
+            data.iter().for_each(|e| temp_vm.stack.push(e.clone()));
+        }
+
+        temp_vm.work(None)
     }
 }
 
