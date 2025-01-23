@@ -692,11 +692,11 @@ impl StmtVisitor for Compiler {
     }
 
     fn visit_array_set_stmt(&mut self, expr: &crate::ast::ArraySetStmt) -> Self::Output {
-        expr.rvalue.accept(self)?;
-
         expr.callee.accept(self)?;
 
         expr.argument.accept(self)?;
+
+        expr.rvalue.accept(self)?;
 
         self.get_cur_stack().push(OpCode::SetArrayIndex);
 

@@ -1,6 +1,6 @@
 use std::{fmt::Debug, io::Write, rc::Rc};
 
-use crate::{prelude, vm::{Immediate, VMResult, VirtualMachine, VirtualMachineError}};
+use crate::{vm::{Immediate,VMResult}, VirtualMachine};
 
 pub trait Callable: Sync + Send {
     fn arity(&self) -> usize;

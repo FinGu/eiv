@@ -471,16 +471,22 @@ impl VirtualMachine {
         let left = self.stack.pop().unwrap();
 
         if let Immediate::StructInst(ref inst) = left{
-            if !kind.is_equal() && !kind.is_not_equal(){
-                return Err(VirtualMachineError::InvalidInpBinaryOp);
+            if kind.is_equal() || kind.is_not_equal(){
+                let uinst = inst.as_ref().borrow();
+
+                if let Some(Immediate::Function(eq)) = uinst.data.get("_eq_"){
+                    return self.standalone_work(eq.clone(), left.clone(), Some(&[right]));
+                }
             }
 
-            let uinst = inst.as_ref().borrow();
+            if kind.is_add(){
+                let uinst = inst.as_ref().borrow();
 
-            if let Some(Immediate::Function(eq)) = uinst.data.get("_eq_"){
-                return self.standalone_work(eq.clone(), left.clone(), Some(&[right]));
+                if let Some(Immediate::Function(eq)) = uinst.data.get("_add_"){
+                    return self.standalone_work(eq.clone(), left.clone(), Some(&[right]));
+                }
             }
-            
+                        
             return Err(VirtualMachineError::InvalidInpBinaryOp);
         }
 
@@ -867,9 +873,9 @@ impl VirtualMachine {
                 }
             },
             OpCode::SetArrayIndex => {
+                let rvalue = self.stack.pop().unwrap();
                 let argument = self.stack.pop().unwrap(); 
                 let callee = self.stack.pop().unwrap();
-                let rvalue = self.stack.pop().unwrap();
 
                 match callee{
                     Immediate::Array(arrn) => {

@@ -1,84 +1,16 @@
 use enum_as_inner::EnumAsInner;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 
 use crate::{
     lexer::{Token, TokenType},
     vm::Immediate,
 };
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum AstError {
-    #[error("Invalid use of the add operator")]
-    InvalidUseOfAddOperator,
-    #[error("Invalid use of the subtract operator")]
-    InvalidUseOfSubtractOperator,
-    #[error("Invalid use of the mul operator")]
-    InvalidUseOfMulOperator,
-    #[error("Invalid use of the modulus operator")]
-    InvalidUseOfModOperator,
-    #[error("Invalid use of div operator")]
-    InvalidUseOfDivOperator,
-    #[error("Invalid use of greater operator")]
-    InvalidUseOfGreaterOperator,
-    #[error("Invalid use of equal operator")]
-    InvalidUseOfEqualOperator,
-    #[error("Invalid use of less operator")]
-    InvalidUseOfLessOperator,
-    #[error("Invalid use of and operator")]
-    InvalidUseOfAndOperator,
-    #[error("Invalid use of or operator")]
-    InvalidUseOfOrOperator,
-    #[error("Division by zero")]
-    DivisionByZero,
-    #[error("Unknown unary operator")]
-    UnknownUnaryOperator,
-    #[error("Unknown binary operator")]
-    UnknownBinaryOperator,
-    #[error("Can't negate anything other than a number")]
-    NegationError,
-    #[error("Can't 'not' anything other than numbers and bools")]
-    NotError,
-    #[error("Bad type to use in a cast")]
-    BadCastingType,
-    #[error("Bad conditional expression")]
-    BadConditionalExpression,
-    #[error("Bad while expression")]
-    BadWhileExpression,
-    #[error("Bad function call")]
-    BadFunctionCall,
-    #[error("Invalid control flow statement for a function")]
-    InvalidControlFlowStmt,
-    #[error("Wrong number of arguments to a function")]
-    WrongNumArgsFun,
-    #[error("Constructor must be a function")]
-    ConstructorMustBeFunc,
-    #[error("Bad access of a field or method")]
-    BadGetExpression,
-    #[error("Bad access of a static field or method")]
-    BadStaticGetExpression,
-    #[error("Bad this expression")]
-    BadThisExpression,
-    #[error("Bad set expression")]
-    BadSetExpression,
-    #[error("You're trying to access something that isn't an array")]
-    BadArraySetExpression,
-    #[error("Bad statements inside a struct")]
-    BadStmtInsideStruct,
-    #[error("Invalid array access")]
-    InvalidArrayAccess,
-    #[error("The overloaded operator isn't of the right type")]
-    OverloadNotOfRightType,
-    #[error("Failed to open file being included")]
-    FailedToInclude,
-}
 
 #[derive(Clone, Debug)]
 pub enum ControlFlowType {
     Break,
     Continue,
     Return(Expression),
-    None,
 }
 
 pub trait Accept<Visitor> {
