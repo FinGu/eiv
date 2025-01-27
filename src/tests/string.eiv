@@ -21,19 +21,11 @@ string = {
         type_of_in = typeof(in)
 
         if type_of_in == "array"{
-            if in != this.vec{
-                return false
-            }
-
-            return true
+            return in == this.vec
         }
 
         if type_of_in == "string"{         
-            if in.vec != this.vec{
-                return false
-            }
-
-            return true
+            return in.vec == this.vec
         }
 
         return false

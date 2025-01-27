@@ -2,8 +2,7 @@ use std::{cell::RefCell, collections::HashMap, fs};
 
 use crate::{
     ast::{
-        Accept, ControlFlowType, ElseStmt, ExprVisitor, FnStmt, LiteralExpr, Statement,
-        StmtVisitor, 
+        Accept, ControlFlowType, ElseStmt, ExprVisitor, Expression, FnStmt, LiteralExpr, Statement, StmtVisitor 
     }, errors, lexer::{Lexer, TokenType}, parser::Parser, vm::{Immediate, OpCode}
 };
 
@@ -42,12 +41,6 @@ impl StructDef {
 
     pub fn insert_static(&mut self, name: String, data: Immediate) {
         self.static_data.insert(name, data);
-    }
-}
-
-impl Function {
-    pub fn get_next(&self, cur: i32) -> OpCode {
-        self.code[(cur + 1) as usize].clone()
     }
 }
 
@@ -223,13 +216,14 @@ impl Compiler {
 
         let stack = self.get_cur_stack();
 
-        stack.push(if is_constructor {
-            OpCode::GetLocal(0)
-        } else {
-            OpCode::Nop
-        });
-
-        stack.push(OpCode::Return);
+        stack.extend([
+            if is_constructor{
+                OpCode::GetLocal(0)
+            } else{
+                OpCode::Nop
+            },
+            OpCode::Return
+        ]);
     }
 
     pub fn work(&mut self, statements: Vec<Statement>) -> CompilerResult<Function> {
@@ -300,21 +294,17 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
             .push(OpCode::Constant(Immediate::StructDef(new_struct.into())));
 
         if expr.is_static {
-            self.compiler
-                .get_cur_stack()
-                .push(OpCode::SetStaticStructVar(name.clone()));
-
-            self.compiler
-                .get_cur_stack()
-                .push(OpCode::GetStaticStructVar(name.clone()));
+            self.compiler.get_cur_stack()
+                .extend([
+                    OpCode::SetStaticStructVar(name.clone()),
+                    OpCode::GetStaticStructVar(name.clone())
+                ]);
         } else {
-            self.compiler
-                .get_cur_stack()
-                .push(OpCode::SetStructVar(name.clone()));
-
-            self.compiler
-                .get_cur_stack()
-                .push(OpCode::GetStructVar(name.clone()));
+            self.compiler.get_cur_stack()
+                .extend([
+                    OpCode::SetStructVar(name.clone()),
+                    OpCode::GetStructVar(name.clone())
+                ]);
         }
 
         let mut struct_compiler = StructCompiler::new(name, self.compiler);
@@ -377,17 +367,15 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
         compiled_result.arity = params.len();
         compiled_result.name = name.clone();
 
-        self.compiler
-            .get_cur_stack()
-            .push(OpCode::Constant(
-                compiled_result.into(),
-            ));
-
-        self.compiler.get_cur_stack().push(if expr.is_static {
-            OpCode::SetStaticStructVar(name.clone())
-        } else {
-            OpCode::SetStructVar(name.clone())
-        });
+        self.compiler.get_cur_stack()
+            .extend([
+                OpCode::Constant(compiled_result.into()),
+                if expr.is_static{
+                    OpCode::SetStaticStructVar(name.clone())
+                } else{
+                    OpCode::SetStructVar(name.clone())
+                }
+        ]);
 
         Ok(())
     }
@@ -423,17 +411,21 @@ impl StmtVisitor for Compiler {
 
         let jump_if_false_pos = self.get_cur_stack().len();
 
-        self.get_cur_stack().push(OpCode::JumpIfFalse(0));
-
-        self.get_cur_stack().push(OpCode::Pop);
+        self.get_cur_stack()
+            .extend([
+                OpCode::JumpIfFalse(0),
+                OpCode::Pop
+        ]);
 
         expr.then.accept(self)?;
 
         let jump_after_pos = self.get_cur_stack().len();
 
-        self.get_cur_stack().push(OpCode::Jump(0));
-
-        self.get_cur_stack().push(OpCode::Pop);
+        self.get_cur_stack()
+            .extend([
+                OpCode::Jump(0),
+                OpCode::Pop
+        ]);
 
         if let OpCode::JumpIfFalse(ref mut imm) = self.get_cur_stack()[jump_if_false_pos] {
             *imm = (jump_after_pos - jump_if_false_pos + 1) as i32;
@@ -449,7 +441,7 @@ impl StmtVisitor for Compiler {
         let jump_after_else_pos = self.get_cur_stack().len();
 
         if let OpCode::Jump(ref mut imm) = self.get_cur_stack()[jump_after_pos] {
-            *imm = (jump_after_else_pos - jump_after_pos) as i32;
+            *imm = (jump_after_else_pos - jump_after_pos) as i32 - 1;
         }
 
         Ok(())
@@ -523,9 +515,11 @@ impl StmtVisitor for Compiler {
 
         let jump_if_false_pos = self.get_cur_stack().len();
 
-        self.get_cur_stack().push(OpCode::JumpIfFalse(0));
-
-        self.get_cur_stack().push(OpCode::Pop);
+        self.get_cur_stack()
+            .extend([
+                OpCode::JumpIfFalse(0),
+                OpCode::Pop
+        ]);
 
         expr.then.accept(self)?;
 
@@ -541,9 +535,11 @@ impl StmtVisitor for Compiler {
 
         self.loop_ctx.set_break_pos(after_jump + 1);
 
-        self.get_cur_stack().push(OpCode::Jump(0));
-
-        self.get_cur_stack().push(OpCode::Pop);
+        self.get_cur_stack()
+            .extend([
+                OpCode::Jump(0),
+                OpCode::Pop
+        ]);
 
         if let OpCode::JumpIfFalse(ref mut imm) = self.get_cur_stack()[jump_if_false_pos] {
             *imm = (after_jump - jump_if_false_pos + 1) as i32;
@@ -585,12 +581,11 @@ impl StmtVisitor for Compiler {
             ..Default::default()
         });
 
-        self.get_cur_stack()
-            .push(OpCode::Constant(Immediate::StructDef(new_struct.into())));
-
-        self.get_cur_stack().push(OpCode::SetLocal(local as i32));
-
-        self.get_cur_stack().push(OpCode::GetLocal(local as i32));
+        self.get_cur_stack().extend([
+            OpCode::Constant(Immediate::StructDef(new_struct.into())),
+            OpCode::SetLocal(local as i32),
+            OpCode::GetLocal(local as i32)
+        ]);
 
         let mut struct_compiler = StructCompiler::new(name, self);
 
@@ -681,12 +676,10 @@ impl StmtVisitor for Compiler {
 
         let local = self.symbol_table.mark(name.clone());
 
-        self.get_cur_stack()
-            .push(OpCode::Constant(
-                compiled_result.into(),
-            ));
-
-        self.get_cur_stack().push(OpCode::SetLocal(local as i32));
+        self.get_cur_stack().extend([
+            OpCode::Constant(compiled_result.into()),
+            OpCode::SetLocal(local as i32)
+        ]);
 
         Ok(())
     }

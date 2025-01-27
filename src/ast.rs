@@ -406,6 +406,12 @@ impl LiteralExpr {
     }
 }
 
+impl From<Immediate> for Expression{
+    fn from(value: Immediate) -> Self {
+        LiteralExpr::new(value).into()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct BinaryExpr {
     pub left: Expression,

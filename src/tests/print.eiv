@@ -1,22 +1,22 @@
 arr = {
     constructor = (arg){
-        this.array = arg
-    }
+        this.array = arg;
+    };
 
     _display_ = (){
-        first = true 
+        first = true;
 
         for i = 0; i < this.array.length; i += 1{
             if !first{
-                print(',')
-            }
+                print(',');
+            } 
 
-            print(this.array[i])
-            first = false
+            print(this.array[i]); 
+            first = false;
         }
-    }
-}
+    };
+};
 
-inst = arr([1,2,3])
+inst = arr([1,2,3]);
 
-println(inst)
+println(inst);

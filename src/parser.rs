@@ -19,8 +19,6 @@ pub enum ParserError {
     BadExpression,
     #[error("Break/Continue outside of a loop")]
     BreakContOutsideLoop,
-    #[error("Too many arguments inside a function call")]
-    TooManyArgsFCall,
     #[error("Return outside of a function")]
     ReturnOutsideFn,
 
@@ -68,7 +66,9 @@ impl Parser {
         let mut stmts: Vec<Statement> = vec![];
 
         while !self.done() {
-            stmts.push(self.get_declaration());
+            if let Some(decl) = self.get_declaration(){
+                stmts.push(decl);
+            }
         }
 
         stmts
@@ -136,17 +136,17 @@ impl Parser {
         None
     }
 
-    pub fn get_primary(&mut self, display_errors: bool) -> Expression {
+    pub fn get_primary(&mut self, display_errors: bool) -> Option<Expression> {
         if self.match_tokens(&[TokenType::Null]) {
-            return LiteralExpr::new(Immediate::Null).into();
+            return Some(Immediate::Null.into());
         }
 
         if self.match_tokens(&[TokenType::True]) {
-            return LiteralExpr::new(Immediate::Boolean(true)).into();
+            return Some(Immediate::Boolean(true).into());
         }
 
         if self.match_tokens(&[TokenType::False]) {
-            return LiteralExpr::new(Immediate::Boolean(false)).into();
+            return Some(Immediate::Boolean(false).into());
         }
 
         let cur_tok = self.peek().clone();
@@ -154,24 +154,23 @@ impl Parser {
         if let TokenType::Char(chr) = cur_tok.token_type {
             self.cur += 1;
 
-            return LiteralExpr::new(Immediate::Char(chr)).into();
+            return Some(Immediate::Char(chr).into());
         }
 
         if let TokenType::Number(num) = cur_tok.token_type {
             // we need to do this manually
             self.cur += 1;
-
-            return LiteralExpr::new(Immediate::Number(num)).into();
+            return Some(Immediate::Number(num).into());
         }
 
         if let TokenType::String(ref str_) = cur_tok.token_type {
             self.cur += 1;
 
-            return LiteralExpr::new(str_.clone().into_bytes().into()).into();
+            return Some(LiteralExpr::new(str_.clone().into_bytes().into()).into());
         }
 
         if self.match_tokens(&[TokenType::This]) {
-            return ThisExpr::new(self.previous().clone()).into();
+            return Some(ThisExpr::new(self.previous().clone()).into());
         }
 
         if self.match_tokens(&[TokenType::LeftParen]) {
@@ -180,7 +179,7 @@ impl Parser {
             //this is the expression contained between the parenthesis ^
             self.expect_next(TokenType::RightParen, display_errors);
 
-            return GroupingExpr::new(expr).into();
+            return Some(GroupingExpr::new(expr).into());
         }
 
         if self.match_tokens(&[TokenType::LeftBracket]) {
@@ -188,7 +187,7 @@ impl Parser {
 
             if self.match_tokens(&[TokenType::RightBracket]) {
                 //empty array
-                return ArrayExpr::new(exprs).into();
+                return Some(ArrayExpr::new(exprs).into());
             }
 
             exprs.push(self.get_expression(display_errors));
@@ -199,13 +198,13 @@ impl Parser {
 
             self.expect_next(TokenType::RightBracket, display_errors);
 
-            return ArrayExpr::new(exprs).into();
+            return Some(ArrayExpr::new(exprs).into());
         }
 
         if let TokenType::Identifier(_) = cur_tok.token_type {
             self.cur += 1;
 
-            return VarExpr::new(cur_tok).into();
+            return Some(VarExpr::new(cur_tok).into());
         }
 
         if self.match_tokens(&[TokenType::EOS]) {
@@ -213,7 +212,7 @@ impl Parser {
 
             self.cur -= 1; // exhaust all the dangling end of statements
 
-            return LiteralExpr::new(Immediate::Null).into();
+            return None;
         }
 
         if display_errors {
@@ -226,13 +225,16 @@ impl Parser {
         self.cur += 1;
         //self.try_sync();
 
-        LiteralExpr::new(Immediate::Null).into()
+        None
     }
 
     //we need this display_errors thing to avoid a print in case of a bad attempt of parsing ( when
     //checking if it's trying to set a field)
     pub fn get_call(&mut self, display_errors: bool) -> Expression {
-        let mut expr = self.get_primary(display_errors);
+        let mut expr = match self.get_primary(display_errors){
+            Some(val) => val,
+            None => return LiteralExpr::new(Immediate::Null).into()
+        };
 
         loop {
             if self.match_tokens(&[TokenType::LeftBracket]) {
@@ -396,19 +398,28 @@ impl Parser {
         expr
     }
 
-    pub fn get_expression_statement(&mut self) -> Statement {
-        let expr = self.get_expression(true);
+    //this is a standalone expression, if it's a null literalexpr, it means it's useless
+    pub fn get_expression_statement(&mut self) -> Option<Statement> {
+        let expr = self.get_expression(true); 
 
         self.expect_next(TokenType::EOS, true);
 
-        Statement::Expression(Box::new(expr.into()))
+        if let Expression::Literal(ref literal) = expr{
+            if literal.value.is_null(){
+                return None;
+            }
+        }
+
+        Some(Statement::Expression(Box::new(expr.into())))
     }
 
     fn get_block(&mut self) -> Vec<Statement> {
         let mut statements = Vec::new();
 
         while !self.done() && self.peek().token_type != TokenType::RightBrace {
-            statements.push(self.get_declaration());
+            if let Some(statement) = self.get_declaration(){
+                statements.push(statement);
+            }
         }
 
         self.expect_next(TokenType::RightBrace, true);
@@ -539,7 +550,7 @@ impl Parser {
     }
 
     pub fn get_include_statement(&mut self) -> Statement {
-        if self.in_fn() || self.in_loop() || self.in_loop() {
+        if self.in_fn() || self.in_loop() {
             errors::LIST.lock().unwrap().push(
                 ParserError::IncludeOutsideMainScope,
                 Some(self.peek().clone()),
@@ -574,37 +585,37 @@ impl Parser {
         empty
     }
 
-    pub fn get_statement(&mut self) -> Statement {
+    pub fn get_statement(&mut self) -> Option<Statement> {
         if self.match_tokens(&[TokenType::If]) {
-            return self.get_if_statement().into(); // to make my life easier
+            return Some(self.get_if_statement().into()); // to make my life easier
         }
 
         if self.match_tokens(&[TokenType::While]) {
-            return self.get_while_statement();
+            return Some(self.get_while_statement());
         }
 
         if self.match_tokens(&[TokenType::For]) {
-            return self.get_for_statement();
+            return Some(self.get_for_statement());
         }
 
         if self.match_tokens(&[TokenType::Break]) {
-            return self.get_break_statement();
+            return Some(self.get_break_statement());
         }
 
         if self.match_tokens(&[TokenType::Continue]) {
-            return self.get_continue_statement();
+            return Some(self.get_continue_statement());
         }
 
         if self.match_tokens(&[TokenType::Return]) {
-            return self.get_return_statement();
+            return Some(self.get_return_statement());
         }
 
         if self.match_tokens(&[TokenType::Include]) {
-            return self.get_include_statement();
+            return Some(self.get_include_statement());
         }
 
         if self.match_tokens(&[TokenType::LeftBrace]) {
-            return self.get_block_statement();
+            return Some(self.get_block_statement());
         }
 
         self.get_expression_statement()
@@ -735,9 +746,7 @@ impl Parser {
 
             self.get_function_declaration(name)
         } else if self.match_tokens(&[TokenType::LeftBrace]) {
-            let strct = self.get_struct_declaration(name);
-
-            strct
+            self.get_struct_declaration(name)
         } else {
             self.get_variable_statement(name)
         };
@@ -805,6 +814,7 @@ impl Parser {
             self.cur = saved_pos;
         }
 
+        
         self.get_optional_either_declaration(true)
     }
 
@@ -838,11 +848,15 @@ impl Parser {
         None
     }
 
-    pub fn get_declaration(&mut self) -> Statement {
+    pub fn get_declaration(&mut self) -> Option<Statement> {
         if let Some(statement) = self.get_call_declaration() {
-            return statement;
+            return Some(statement);
         }
 
-        self.get_statement()
+        if let Some(statement) = self.get_statement(){
+            return Some(statement);
+        }
+
+        None
     }
 }
