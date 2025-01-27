@@ -93,13 +93,13 @@ impl From<StructInst> for Immediate {
     }
 }
 
-impl From<Vec<Immediate>> for Immediate{
+impl From<Vec<Immediate>> for Immediate {
     fn from(value: Vec<Immediate>) -> Self {
         Self::Array(RefCell::new(value).into())
     }
 }
 
-impl From<Function> for Immediate{
+impl From<Function> for Immediate {
     fn from(value: Function) -> Self {
         Self::Function(value.into())
     }
@@ -117,21 +117,21 @@ impl Display for Immediate {
 
                 write!(f, "[")?;
 
-                for el in arr.iter(){
-                    if print_comma{
+                for el in arr.iter() {
+                    if print_comma {
                         write!(f, ", ")?;
                     }
 
-                    match el{
+                    match el {
                         Immediate::Char(_) => write!(f, "'{}'", el)?,
-                        _ => write!(f, "{}", el)?
+                        _ => write!(f, "{}", el)?,
                     }
 
                     print_comma = true;
                 }
 
                 write!(f, "]")
-            },
+            }
             Self::Boolean(b) => write!(f, "{}", if *b { "true" } else { "false" }),
             Self::Null => write!(f, "null"),
             Self::StructInst(inst) => write!(
@@ -187,7 +187,7 @@ impl PartialOrd for Immediate {
                     }
                 }
                 Some(std::cmp::Ordering::Equal)
-            },
+            }
             (Self::Null, _) => Some(std::cmp::Ordering::Less),
             (_, Self::Null) => Some(std::cmp::Ordering::Greater),
             (Self::Number(_), _) => Some(std::cmp::Ordering::Less),
@@ -230,7 +230,7 @@ impl Add for Immediate {
             (Self::Number(l), Self::Number(r)) => Self::Number(l + r),
             (Self::Array(l), Self::Array(r)) => {
                 let left = l.as_ref().borrow();
-                let right = r.as_ref().borrow(); 
+                let right = r.as_ref().borrow();
 
                 [left.clone(), right.clone()].concat().into()
             }
@@ -241,7 +241,7 @@ impl Add for Immediate {
 
                 RefCell::new(new_arr).into()
             }),
-            _ => Self::Number({ f64::NAN }),
+            _ => Self::Number(f64::NAN),
         }
     }
 }
@@ -252,7 +252,7 @@ impl Sub for Immediate {
     fn sub(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
             (Self::Number(l), Self::Number(r)) => Self::Number(l - r),
-            _ => Self::Number({ f64::NAN }),
+            _ => Self::Number(f64::NAN),
         }
     }
 }
@@ -263,7 +263,7 @@ impl Div for Immediate {
     fn div(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
             (Self::Number(l), Self::Number(r)) => Self::Number(l / r),
-            _ => Self::Number({ f64::NAN }),
+            _ => Self::Number(f64::NAN),
         }
     }
 }
@@ -278,11 +278,11 @@ impl Mul for Immediate {
 
                 Self::Array(RefCell::new(repeated).into())
             }
-            (Self::Array(_l), Self::Number(_r)) => Self::Array({
+            (Self::Array(_l), Self::Number(_r)) => {
                 //maybe later
                 unimplemented!()
-            }),
-            _ => Self::Number({ f64::NAN }),
+            }
+            _ => Self::Number(f64::NAN),
         }
     }
 }
@@ -385,14 +385,12 @@ pub enum OpCode {
     GetStructVar(String),
     GetStaticStructVar(String),
     //these are for struct defs
-
     GetGlobal(String),
 
     GetProp(String),
     GetStaticProp(String),
     SetProp(String, Box<OpCode>),
     //these are for struct instances
-
     CaptureArray(i32),
 
     Call(i32),
@@ -469,23 +467,23 @@ impl VirtualMachine {
 
         let left = self.stack.pop().unwrap();
 
-        if let Immediate::StructInst(ref inst) = left{
-            if kind.is_equal() || kind.is_not_equal(){
+        if let Immediate::StructInst(ref inst) = left {
+            if kind.is_equal() || kind.is_not_equal() {
                 let uinst = inst.as_ref().borrow();
 
-                if let Some(Immediate::Function(eq)) = uinst.data.get("_eq_"){
+                if let Some(Immediate::Function(eq)) = uinst.data.get("_eq_") {
                     return self.standalone_work(eq.clone(), left.clone(), Some(&[right]));
                 }
             }
 
-            if kind.is_add(){
+            if kind.is_add() {
                 let uinst = inst.as_ref().borrow();
 
-                if let Some(Immediate::Function(eq)) = uinst.data.get("_add_"){
+                if let Some(Immediate::Function(eq)) = uinst.data.get("_add_") {
                     return self.standalone_work(eq.clone(), left.clone(), Some(&[right]));
                 }
             }
-                        
+
             return Err(VirtualMachineError::InvalidInpBinaryOp);
         }
 
@@ -539,7 +537,7 @@ impl VirtualMachine {
     fn call_function(&mut self, params_num: usize) -> VMResult<()> {
         let base = self.stack.len() - params_num - 1;
 
-        match &self.stack[base]{
+        match &self.stack[base] {
             Immediate::Function(normal_func) => {
                 self.raw_call(normal_func.clone(), params_num, base, None)?;
             }
@@ -604,7 +602,7 @@ impl VirtualMachine {
         self.get_cur_call_frame().ip
     }
 
-    pub fn get_cur_instance(&self) -> &Option<Immediate>{
+    pub fn get_cur_instance(&self) -> &Option<Immediate> {
         &self.get_cur_call_frame().instance
     }
 
@@ -706,11 +704,14 @@ impl VirtualMachine {
             OpCode::SetLocal(pos) => {
                 let last = self.stack.last().unwrap();
 
-                self.set_local(pos, if let Immediate::Array(ref arr) = last{
-                    arr.as_ref().borrow().clone().into()
-                } else{
-                    last.clone()
-                });
+                self.set_local(
+                    pos,
+                    if let Immediate::Array(ref arr) = last {
+                        arr.as_ref().borrow().clone().into()
+                    } else {
+                        last.clone()
+                    },
+                );
             }
             OpCode::GetGlobal(name) => {
                 let global = self.globals.get(&name).cloned().unwrap_or(Immediate::Null);
@@ -732,17 +733,17 @@ impl VirtualMachine {
                         };
 
                         self.stack.push(bound_data);
-                    },
+                    }
                     Immediate::Array(ref arr) => {
-                        self.stack.push(if name == "length"{
+                        self.stack.push(if name == "length" {
                             Immediate::Number(arr.as_ref().borrow().len() as f64)
-                        } else{
+                        } else {
                             Immediate::Null
                         });
                     }
                     _ => return Err(VirtualMachineError::GetNotInstance),
                 }
-            },
+            }
             OpCode::GetStaticProp(name) => {
                 let last = self.stack.pop().unwrap();
 
@@ -753,7 +754,6 @@ impl VirtualMachine {
                     }
                     _ => return Err(VirtualMachineError::GetNotInstance),
                 }
-
             }
             OpCode::SetProp(name, op) => {
                 let rvalue = self.stack.pop().unwrap();
@@ -791,20 +791,19 @@ impl VirtualMachine {
                     }
                     _ => return Err(VirtualMachineError::BadStructuredStruct),
                 }
-            },
+            }
             OpCode::GetStaticStructVar(name) => {
                 let sstruct = self.stack.last().unwrap();
 
-                match sstruct{
+                match sstruct {
                     Immediate::StructDef(sdef) => {
                         let value = sdef.as_ref().borrow().get_static(&name);
 
                         self.stack.push(value);
-                    },
-                    _ => return Err(VirtualMachineError::BadStructuredStruct)
+                    }
+                    _ => return Err(VirtualMachineError::BadStructuredStruct),
                 }
-
-            },
+            }
             OpCode::SetStructVar(name) => {
                 let to_set = self.stack.pop().unwrap();
                 let sstruct = self.stack.last().unwrap();
@@ -826,7 +825,7 @@ impl VirtualMachine {
                     }
                     _ => return Err(VirtualMachineError::BadStructuredStruct),
                 }
-            },
+            }
             OpCode::JumpIfFalse(offset) => {
                 if let Some(Immediate::Boolean(cond)) = self.stack.last() {
                     if !cond {
@@ -840,10 +839,8 @@ impl VirtualMachine {
             OpCode::CaptureArray(mut arg_count) => {
                 let mut array: Vec<Immediate> = Vec::new();
 
-                while arg_count > 0{
-                    array.push(self.stack.pop()
-                        .unwrap()
-                    );
+                while arg_count > 0 {
+                    array.push(self.stack.pop().unwrap());
 
                     arg_count -= 1;
                 }
@@ -851,80 +848,69 @@ impl VirtualMachine {
                 array.reverse();
 
                 self.stack.push(array.into());
-            },
+            }
             OpCode::GetArrayIndex => {
-                let argument = self.stack.pop().unwrap(); 
+                let argument = self.stack.pop().unwrap();
                 let callee = self.stack.pop().unwrap();
 
-                match callee{
+                match callee {
                     Immediate::Array(arrn) => {
                         let arr = arrn.as_ref().borrow();
 
                         let len = arr.len() as i32;
 
-                        let Some(index) = argument.as_index(len) else{
+                        let Some(index) = argument.as_index(len) else {
                             return Err(VirtualMachineError::InvalidIndex);
                         };
 
                         self.stack.push(arr[index].clone());
-                    },
-                    _ => return Err(VirtualMachineError::NotAnArray)
+                    }
+                    _ => return Err(VirtualMachineError::NotAnArray),
                 }
-            },
+            }
             OpCode::SetArrayIndex => {
                 let rvalue = self.stack.pop().unwrap();
-                let argument = self.stack.pop().unwrap(); 
+                let argument = self.stack.pop().unwrap();
                 let callee = self.stack.pop().unwrap();
 
-                match callee{
+                match callee {
                     Immediate::Array(arrn) => {
                         let mut arr = arrn.as_ref().borrow_mut();
 
                         let len = arr.len() as i32;
 
-                        let Some(index) = argument.as_index(len) else{
+                        let Some(index) = argument.as_index(len) else {
                             return Err(VirtualMachineError::InvalidIndex);
                         };
 
                         arr[index] = rvalue;
-                    },
-                    _ => return Err(VirtualMachineError::NotAnArray)
+                    }
+                    _ => return Err(VirtualMachineError::NotAnArray),
                 }
             }
             OpCode::Call(params_num) => {
                 self.call_function(params_num as usize)?;
             }
             OpCode::This => {
-                self.stack.push(
-                    self.get_cur_instance()
-                        .clone()
-                        .unwrap_or(Immediate::Null)
-                );
-            },
+                self.stack
+                    .push(self.get_cur_instance().clone().unwrap_or(Immediate::Null));
+            }
             OpCode::ConstructThis => {
-                let raw_instance = self.get_cur_instance()
-                    .clone()
-                    .unwrap_or(Immediate::Null);
+                let raw_instance = self.get_cur_instance().clone().unwrap_or(Immediate::Null);
 
-                let cur_instance = raw_instance
-                    .as_struct_inst()
-                    .unwrap()
-                    .as_ref()
-                    .borrow();
+                let cur_instance = raw_instance.as_struct_inst().unwrap().as_ref().borrow();
 
-                self.stack.push(Immediate::StructDef(cur_instance.from.clone()));
+                self.stack
+                    .push(Immediate::StructDef(cur_instance.from.clone()));
             }
             OpCode::Nop => {}
-            _ => {
-                unimplemented!()
-            },
         }
 
         Ok(None)
     }
 
     pub fn work(&mut self, function: Option<Rc<Function>>) -> VMResult<Immediate> {
-        if let Some(ref func) = function{
+        if let Some(ref func) = function {
             self.setup_call_frame(func.clone());
         }
 
@@ -934,8 +920,8 @@ impl VirtualMachine {
 
         while let Some(el) = self.next_instr() {
             //println!("IP: {}, Executing: {:?} with last stack value: {:?}", self.get_ip()-1, el, self.stack.last());
-            
-            if let Some(val) = self.execute_opcode(el)?{
+
+            if let Some(val) = self.execute_opcode(el)? {
                 last_stack_value = val;
             }
         }
@@ -943,20 +929,22 @@ impl VirtualMachine {
         Ok(last_stack_value)
     }
 
-    pub fn standalone_work(&self, function: Rc<Function>, instance: Immediate, data_to_push: Option<&[Immediate]>) -> VMResult<Immediate>{
+    pub fn standalone_work(
+        &self,
+        function: Rc<Function>,
+        instance: Immediate,
+        data_to_push: Option<&[Immediate]>,
+    ) -> VMResult<Immediate> {
         let mut temp_vm = VirtualMachine::new();
 
-        prelude::include_from(&mut temp_vm, self); 
+        prelude::include_from(&mut temp_vm, self);
         // this is so inefficient it's not even funny
 
         temp_vm.setup_call_frame(function);
 
-        temp_vm.call_frames
-            .last_mut()
-            .unwrap()
-            .instance = Some(instance);
+        temp_vm.call_frames.last_mut().unwrap().instance = Some(instance);
 
-        if let Some(data) = data_to_push{
+        if let Some(data) = data_to_push {
             data.iter().for_each(|e| temp_vm.stack.push(e.clone()));
         }
 
@@ -968,8 +956,6 @@ impl VirtualMachine {
 pub enum VirtualMachineError {
     #[error("Invalid input for a binary op")]
     InvalidInpBinaryOp,
-    #[error("Invalid number of parameters")]
-    BadArity,
     #[error("Function doesn't exist")]
     FuncDoesntExist,
     #[error("Wrong num of parameters to a func")]

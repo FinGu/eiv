@@ -2,8 +2,12 @@ use std::{cell::RefCell, collections::HashMap, fs};
 
 use crate::{
     ast::{
-        Accept, ControlFlowType, ElseStmt, ExprVisitor, Expression, FnStmt, LiteralExpr, Statement, StmtVisitor 
-    }, errors, lexer::{Lexer, TokenType}, parser::Parser, vm::{Immediate, OpCode}
+        Accept, ControlFlowType, ElseStmt, ExprVisitor, FnStmt, LiteralExpr, Statement, StmtVisitor,
+    },
+    errors,
+    lexer::{Lexer, TokenType},
+    parser::Parser,
+    vm::{Immediate, OpCode},
 };
 
 #[derive(Clone, Debug, Default)]
@@ -217,12 +221,12 @@ impl Compiler {
         let stack = self.get_cur_stack();
 
         stack.extend([
-            if is_constructor{
+            if is_constructor {
                 OpCode::GetLocal(0)
-            } else{
+            } else {
                 OpCode::Nop
             },
-            OpCode::Return
+            OpCode::Return,
         ]);
     }
 
@@ -258,7 +262,7 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
     fn visit_set_stmt(&mut self, expr: &crate::ast::SetStmt) -> Self::Output {
         expr.accept(self.compiler)
     }
-    
+
     fn visit_if_stmt(&mut self, _: &crate::ast::IfStmt) -> Self::Output {
         unreachable!()
     }
@@ -294,17 +298,15 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
             .push(OpCode::Constant(Immediate::StructDef(new_struct.into())));
 
         if expr.is_static {
-            self.compiler.get_cur_stack()
-                .extend([
-                    OpCode::SetStaticStructVar(name.clone()),
-                    OpCode::GetStaticStructVar(name.clone())
-                ]);
+            self.compiler.get_cur_stack().extend([
+                OpCode::SetStaticStructVar(name.clone()),
+                OpCode::GetStaticStructVar(name.clone()),
+            ]);
         } else {
-            self.compiler.get_cur_stack()
-                .extend([
-                    OpCode::SetStructVar(name.clone()),
-                    OpCode::GetStructVar(name.clone())
-                ]);
+            self.compiler.get_cur_stack().extend([
+                OpCode::SetStructVar(name.clone()),
+                OpCode::GetStructVar(name.clone()),
+            ]);
         }
 
         let mut struct_compiler = StructCompiler::new(name, self.compiler);
@@ -367,14 +369,13 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
         compiled_result.arity = params.len();
         compiled_result.name = name.clone();
 
-        self.compiler.get_cur_stack()
-            .extend([
-                OpCode::Constant(compiled_result.into()),
-                if expr.is_static{
-                    OpCode::SetStaticStructVar(name.clone())
-                } else{
-                    OpCode::SetStructVar(name.clone())
-                }
+        self.compiler.get_cur_stack().extend([
+            OpCode::Constant(compiled_result.into()),
+            if expr.is_static {
+                OpCode::SetStaticStructVar(name.clone())
+            } else {
+                OpCode::SetStructVar(name.clone())
+            },
         ]);
 
         Ok(())
@@ -412,20 +413,13 @@ impl StmtVisitor for Compiler {
         let jump_if_false_pos = self.get_cur_stack().len();
 
         self.get_cur_stack()
-            .extend([
-                OpCode::JumpIfFalse(0),
-                OpCode::Pop
-        ]);
+            .extend([OpCode::JumpIfFalse(0), OpCode::Pop]);
 
         expr.then.accept(self)?;
 
         let jump_after_pos = self.get_cur_stack().len();
 
-        self.get_cur_stack()
-            .extend([
-                OpCode::Jump(0),
-                OpCode::Pop
-        ]);
+        self.get_cur_stack().extend([OpCode::Jump(0), OpCode::Pop]);
 
         if let OpCode::JumpIfFalse(ref mut imm) = self.get_cur_stack()[jump_if_false_pos] {
             *imm = (jump_after_pos - jump_if_false_pos + 1) as i32;
@@ -481,7 +475,6 @@ impl StmtVisitor for Compiler {
             ControlFlowType::Continue => {
                 self.push_cflow(LoopStmtType::Continue);
             }
-            _ => unimplemented!(),
         }
 
         Ok(())
@@ -516,10 +509,7 @@ impl StmtVisitor for Compiler {
         let jump_if_false_pos = self.get_cur_stack().len();
 
         self.get_cur_stack()
-            .extend([
-                OpCode::JumpIfFalse(0),
-                OpCode::Pop
-        ]);
+            .extend([OpCode::JumpIfFalse(0), OpCode::Pop]);
 
         expr.then.accept(self)?;
 
@@ -535,11 +525,7 @@ impl StmtVisitor for Compiler {
 
         self.loop_ctx.set_break_pos(after_jump + 1);
 
-        self.get_cur_stack()
-            .extend([
-                OpCode::Jump(0),
-                OpCode::Pop
-        ]);
+        self.get_cur_stack().extend([OpCode::Jump(0), OpCode::Pop]);
 
         if let OpCode::JumpIfFalse(ref mut imm) = self.get_cur_stack()[jump_if_false_pos] {
             *imm = (after_jump - jump_if_false_pos + 1) as i32;
@@ -584,7 +570,7 @@ impl StmtVisitor for Compiler {
         self.get_cur_stack().extend([
             OpCode::Constant(Immediate::StructDef(new_struct.into())),
             OpCode::SetLocal(local as i32),
-            OpCode::GetLocal(local as i32)
+            OpCode::GetLocal(local as i32),
         ]);
 
         let mut struct_compiler = StructCompiler::new(name, self);
@@ -603,7 +589,7 @@ impl StmtVisitor for Compiler {
     fn visit_include_stmt(&mut self, expr: &crate::ast::IncludeStmt) -> Self::Output {
         let name = &expr.file;
 
-        let inner = match fs::read_to_string(name){
+        let inner = match fs::read_to_string(name) {
             Ok(var) => var,
             Err(_) => {
                 return Err(CompilerError::InvalidFile);
@@ -627,7 +613,7 @@ impl StmtVisitor for Compiler {
         let mut comp = Compiler::new(old_symbol_table);
 
         let result = comp.work(statements).unwrap();
-        
+
         let cur_stack = self.get_cur_stack();
 
         let code = result.code;
@@ -678,7 +664,7 @@ impl StmtVisitor for Compiler {
 
         self.get_cur_stack().extend([
             OpCode::Constant(compiled_result.into()),
-            OpCode::SetLocal(local as i32)
+            OpCode::SetLocal(local as i32),
         ]);
 
         Ok(())
@@ -713,9 +699,9 @@ impl ExprVisitor for Compiler {
 
         let name = expr.argument.token_type.as_identifier().unwrap().clone();
 
-        if expr.is_static{
+        if expr.is_static {
             self.get_cur_stack().push(OpCode::GetStaticProp(name));
-        } else{
+        } else {
             self.get_cur_stack().push(OpCode::GetProp(name));
         }
 
@@ -760,7 +746,7 @@ impl ExprVisitor for Compiler {
 
         let mut arg_amount = 0;
 
-        for expr in exprs{
+        for expr in exprs {
             expr.accept(self)?;
             arg_amount += 1;
         }
@@ -815,7 +801,7 @@ impl ExprVisitor for Compiler {
     fn visit_variable_expr(&mut self, expr: &crate::ast::VarExpr) -> Self::Output {
         let name = expr.name.token_type.as_identifier().unwrap().clone();
 
-        if name == self.cur_struct_name{
+        if name == self.cur_struct_name {
             self.get_cur_stack().push(OpCode::ConstructThis);
             return Ok(());
         }
@@ -836,7 +822,7 @@ impl ExprVisitor for Compiler {
         expr.callee.accept(self)?;
 
         expr.argument.accept(self)?;
-        
+
         self.get_cur_stack().push(OpCode::GetArrayIndex);
 
         Ok(())
@@ -844,10 +830,6 @@ impl ExprVisitor for Compiler {
 }
 #[derive(thiserror::Error, Debug)]
 pub enum CompilerError {
-    #[error("Generic error")]
-    Generic,
-    #[error("Unresolved symbol")]
-    UnresolvedSymbol,
     #[error("Not a valid file to include")]
     InvalidFile,
 }

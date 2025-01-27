@@ -39,10 +39,6 @@ impl ErrorHandler {
 
         self.list.clear();
     }
-
-    pub fn empty(&self) -> bool {
-        self.list.is_empty()
-    }
 }
 
 pub static LIST: LazyLock<Mutex<ErrorHandler>> = LazyLock::new(|| Mutex::new(ErrorHandler::new()));

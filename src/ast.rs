@@ -1,10 +1,7 @@
 use enum_as_inner::EnumAsInner;
 use std::fmt::Debug;
 
-use crate::{
-    lexer::{Token, TokenType},
-    vm::Immediate,
-};
+use crate::{lexer::Token, vm::Immediate};
 
 #[derive(Clone, Debug)]
 pub enum ControlFlowType {
@@ -150,6 +147,7 @@ pub struct ExprStmt {
     pub expression: Expression,
 }
 
+#[allow(dead_code)]
 impl ExprStmt {
     pub fn new(expression: Expression) -> Self {
         Self { expression }
@@ -406,7 +404,7 @@ impl LiteralExpr {
     }
 }
 
-impl From<Immediate> for Expression{
+impl From<Immediate> for Expression {
     fn from(value: Immediate) -> Self {
         LiteralExpr::new(value).into()
     }
@@ -460,6 +458,7 @@ impl GroupingExpr {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct ThisExpr {
     pub token: Token,
@@ -492,15 +491,6 @@ impl VarExpr {
     pub fn new(name: Token) -> Self {
         Self { name }
     }
-
-    pub fn from_str(name: String, line: i32) -> Self {
-        Self {
-            name: Token {
-                token_type: TokenType::Identifier(name),
-                line,
-            },
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -515,6 +505,7 @@ impl ArrayGetExpr {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct CallExpr {
     pub callee: Expression,
@@ -586,6 +577,7 @@ impl From<SetStmt> for Statement {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct ArraySetStmt {
     pub callee: Expression, // this is basically a GetExpr
@@ -688,7 +680,7 @@ where
     }
 }
 
-impl<Visitor, T> Accept<Visitor> for IncludeStmt 
+impl<Visitor, T> Accept<Visitor> for IncludeStmt
 where
     Visitor: StmtVisitor<Output = T>,
 {
@@ -698,7 +690,6 @@ where
         visitor.visit_include_stmt(self)
     }
 }
-
 
 impl<Visitor, T> Accept<Visitor> for VarExpr
 where
@@ -744,7 +735,7 @@ where
     }
 }
 
-impl<Visitor, T> Accept<Visitor> for ArrayGetExpr 
+impl<Visitor, T> Accept<Visitor> for ArrayGetExpr
 where
     Visitor: ExprVisitor<Output = T>,
 {
@@ -754,7 +745,6 @@ where
         visitor.visit_array_get_expr(self)
     }
 }
-
 
 impl<Visitor, T> Accept<Visitor> for VarStmt
 where
@@ -885,7 +875,6 @@ where
             Expression::This(ref this) => this.accept(visitor),
             Expression::Array(ref arr) => arr.accept(visitor),
             Expression::ArrayGet(ref arrget) => arrget.accept(visitor),
-            _ => unimplemented!(),
         }
     }
 }
@@ -910,7 +899,6 @@ where
             Statement::Set(ref set) => set.accept(visitor),
             Statement::ArraySet(ref arrset) => arrset.accept(visitor),
             Statement::Include(ref incl) => incl.accept(visitor),
-            _ => unimplemented!(),
         }
     }
 }

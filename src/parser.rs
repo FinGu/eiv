@@ -66,7 +66,7 @@ impl Parser {
         let mut stmts: Vec<Statement> = vec![];
 
         while !self.done() {
-            if let Some(decl) = self.get_declaration(){
+            if let Some(decl) = self.get_declaration() {
                 stmts.push(decl);
             }
         }
@@ -231,9 +231,9 @@ impl Parser {
     //we need this display_errors thing to avoid a print in case of a bad attempt of parsing ( when
     //checking if it's trying to set a field)
     pub fn get_call(&mut self, display_errors: bool) -> Expression {
-        let mut expr = match self.get_primary(display_errors){
+        let mut expr = match self.get_primary(display_errors) {
             Some(val) => val,
-            None => return LiteralExpr::new(Immediate::Null).into()
+            None => return LiteralExpr::new(Immediate::Null).into(),
         };
 
         loop {
@@ -400,12 +400,12 @@ impl Parser {
 
     //this is a standalone expression, if it's a null literalexpr, it means it's useless
     pub fn get_expression_statement(&mut self) -> Option<Statement> {
-        let expr = self.get_expression(true); 
+        let expr = self.get_expression(true);
 
         self.expect_next(TokenType::EOS, true);
 
-        if let Expression::Literal(ref literal) = expr{
-            if literal.value.is_null(){
+        if let Expression::Literal(ref literal) = expr {
+            if literal.value.is_null() {
                 return None;
             }
         }
@@ -417,7 +417,7 @@ impl Parser {
         let mut statements = Vec::new();
 
         while !self.done() && self.peek().token_type != TokenType::RightBrace {
-            if let Some(statement) = self.get_declaration(){
+            if let Some(statement) = self.get_declaration() {
                 statements.push(statement);
             }
         }
@@ -814,7 +814,6 @@ impl Parser {
             self.cur = saved_pos;
         }
 
-        
         self.get_optional_either_declaration(true)
     }
 
@@ -853,7 +852,7 @@ impl Parser {
             return Some(statement);
         }
 
-        if let Some(statement) = self.get_statement(){
+        if let Some(statement) = self.get_statement() {
             return Some(statement);
         }
 
