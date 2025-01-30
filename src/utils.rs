@@ -7,7 +7,7 @@ use crate::{
 };
 
 #[derive(thiserror::Error, Debug)]
-pub enum InterpreterError{
+pub enum InterpreterError {
     #[error("Error while lexing")]
     Lexing,
     #[error("Error while parsing")]
@@ -23,13 +23,13 @@ pub fn run_interpreter(
     vm: &mut VirtualMachine,
     file_contents: String,
     file_name: &str,
-    repl_mode: bool
-) -> InterpreterResult<(Immediate, SymbolTable)>{
+    repl_mode: bool,
+) -> InterpreterResult<(Immediate, SymbolTable)> {
     let mut scanner = Lexer::new(file_contents);
 
     let tokens = scanner.work();
 
-    if errors::LIST.lock().unwrap().report(){
+    if errors::LIST.lock().unwrap().report() {
         return Err(InterpreterError::Lexing);
     }
 
@@ -37,7 +37,7 @@ pub fn run_interpreter(
 
     let statements = parser.work();
 
-    if errors::LIST.lock().unwrap().report(){
+    if errors::LIST.lock().unwrap().report() {
         return Err(InterpreterError::Parsing);
     }
 
@@ -45,8 +45,7 @@ pub fn run_interpreter(
 
     let result = comp.work(statements).unwrap();
 
-    let ret = vm.work(Some(result.into()))
-        .map_err(InterpreterError::VM)?;
+    let ret = vm.work(Some(result.into())).map_err(InterpreterError::VM)?;
 
     Ok((ret, comp.symbol_table))
 }

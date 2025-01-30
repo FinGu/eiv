@@ -66,7 +66,7 @@ impl<'a> Parser<'a> {
         let mut stmts: Vec<Statement> = vec![];
 
         while !self.done() {
-            if let Some(decl) = self.get_declaration() {
+            if let Some(decl) = self.get_declaration(true) {
                 stmts.push(decl);
             }
         }
@@ -399,10 +399,12 @@ impl<'a> Parser<'a> {
     }
 
     //this is a standalone expression, if it's a null literalexpr, it means it's useless
-    pub fn get_expression_statement(&mut self) -> Option<Statement> {
+    pub fn get_expression_statement(&mut self, eos_check: bool) -> Option<Statement> {
         let expr = self.get_expression(true);
 
-        self.expect_next(TokenType::EOS, true);
+        if eos_check {
+            self.expect_next(TokenType::EOS, true);
+        }
 
         if let Expression::Literal(ref literal) = expr {
             if literal.value.is_null() {
@@ -417,7 +419,7 @@ impl<'a> Parser<'a> {
         let mut statements = Vec::new();
 
         while !self.done() && self.peek().token_type != TokenType::RightBrace {
-            if let Some(statement) = self.get_declaration() {
+            if let Some(statement) = self.get_declaration(true) {
                 statements.push(statement);
             }
         }
@@ -585,7 +587,17 @@ impl<'a> Parser<'a> {
         empty
     }
 
-    pub fn get_statement(&mut self) -> Option<Statement> {
+    pub fn get_do_statement(&mut self) -> Statement {
+        let statement = self.get_declaration(false).unwrap();
+
+        self.expect_next(TokenType::If, true);
+
+        let expression = self.get_expression(true);
+
+        IfStmt::new(expression, vec![statement], None).into()
+    }
+
+    pub fn get_statement(&mut self, eos_check: bool) -> Option<Statement> {
         if self.match_tokens(&[TokenType::If]) {
             return Some(self.get_if_statement().into()); // to make my life easier
         }
@@ -614,11 +626,15 @@ impl<'a> Parser<'a> {
             return Some(self.get_include_statement());
         }
 
+        if self.match_tokens(&[TokenType::Do]) {
+            return Some(self.get_do_statement());
+        }
+
         if self.match_tokens(&[TokenType::LeftBrace]) {
             return Some(self.get_block_statement());
         }
 
-        self.get_expression_statement()
+        self.get_expression_statement(eos_check)
     }
 
     pub fn get_parameters(&mut self) -> Vec<String> {
@@ -758,7 +774,7 @@ impl<'a> Parser<'a> {
         statement
     }
 
-    pub fn get_call_declaration(&mut self) -> Option<Statement> {
+    pub fn get_call_declaration(&mut self, eos_check: bool) -> Option<Statement> {
         let saved_pos = self.cur;
 
         let expr = self.get_call(false);
@@ -781,7 +797,9 @@ impl<'a> Parser<'a> {
                                                        // seen the bug, might as well say it wasn't
                                                        // planned
 
-                self.expect_next(TokenType::EOS, true);
+                if eos_check {
+                    self.expect_next(TokenType::EOS, true);
+                }
 
                 return Some(
                     SetStmt::new(
@@ -796,7 +814,10 @@ impl<'a> Parser<'a> {
                 let arr_expr = expr.as_array_get().unwrap();
 
                 let rexpr = self.get_expression(true);
-                self.expect_next(TokenType::EOS, true);
+
+                if eos_check {
+                    self.expect_next(TokenType::EOS, true);
+                }
 
                 return Some(
                     ArraySetStmt::new(
@@ -814,7 +835,7 @@ impl<'a> Parser<'a> {
             self.cur = saved_pos;
         }
 
-        self.get_optional_either_declaration(true)
+        self.get_optional_either_declaration(eos_check)
     }
 
     pub fn get_optional_either_declaration(&mut self, eos_check: bool) -> Option<Statement> {
@@ -847,12 +868,12 @@ impl<'a> Parser<'a> {
         None
     }
 
-    pub fn get_declaration(&mut self) -> Option<Statement> {
-        if let Some(statement) = self.get_call_declaration() {
+    pub fn get_declaration(&mut self, eos_check: bool) -> Option<Statement> {
+        if let Some(statement) = self.get_call_declaration(eos_check) {
             return Some(statement);
         }
 
-        if let Some(statement) = self.get_statement() {
+        if let Some(statement) = self.get_statement(eos_check) {
             return Some(statement);
         }
 

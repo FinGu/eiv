@@ -385,7 +385,6 @@ pub enum OpCode {
     GetStructVar(String),
     GetStaticStructVar(String),
     //these are for struct defs
-    
     GetGlobal(String),
     SetGlobal(String),
 
@@ -714,13 +713,14 @@ impl VirtualMachine {
                         last.clone()
                     },
                 );
-            },
+            }
             OpCode::GetGlobal(name) => {
                 let global = self.globals.get(&name).cloned().unwrap_or(Immediate::Null);
 
                 self.stack.push(global.clone());
-            }, 
-            OpCode::SetGlobal(name) => { // only ever used if in repl mode
+            }
+            OpCode::SetGlobal(name) => {
+                // only ever used if in repl mode
                 let last = self.stack.pop().unwrap();
 
                 self.globals.insert(name, last);

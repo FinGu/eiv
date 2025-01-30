@@ -22,7 +22,7 @@ array_declaration: '[' arguments? ']';
 fn_declaration: '(' fn_parameters? ')' block;
 fn_parameters: IDENTIFIER (',' IDENTIFIER )*;
 
-statement: expression_stmt | block | if_stmt | while_stmt | break_stmt | continue_stmt | return_stmt | break_stmt | include_stmt;
+statement: expression_stmt | block | if_stmt | while_stmt | break_stmt | continue_stmt | return_stmt | break_stmt | include_stmt | do_stmt;
 
 expression_stmt: expression EOS;
 
@@ -38,6 +38,7 @@ break_stmt 'break' EOS;
 continue_stmt 'continue' EOS;
 return_stmt: 'return' expression EOS;
 include_stmt: 'include' (STRING | '<' IDENTIFIER '>') EOS;
+do_stmt: 'do' declaration 'if' expression EOS;
 
 expression: equality (('&&' | '||') equality)*;
 equality: comparison (('!=' | '==') comparison)*;

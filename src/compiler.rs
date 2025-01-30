@@ -194,7 +194,7 @@ pub struct Compiler {
     loop_ctx: LoopContext,
 
     is_constructor: bool,
-    repl_mode: bool
+    repl_mode: bool,
 }
 
 impl Compiler {
@@ -246,7 +246,7 @@ impl Compiler {
         &mut self.cur_func.code
     }
 
-    fn must_be_global(&self) -> bool{
+    fn must_be_global(&self) -> bool {
         self.symbol_table.depth == 0 && self.repl_mode
     }
 }
@@ -408,7 +408,8 @@ impl StmtVisitor for Compiler {
 
         our_expr.accept(self)?;
 
-        if !self.repl_mode{ // in repl mode we want the last stack value to be the printed
+        if !self.repl_mode {
+            // in repl mode we want the last stack value to be the printed
             self.get_cur_stack().push(OpCode::Pop);
         }
 
@@ -573,14 +574,15 @@ impl StmtVisitor for Compiler {
             ..Default::default()
         });
 
-        self.get_cur_stack().push(OpCode::Constant(Immediate::StructDef(new_struct.into())));
+        self.get_cur_stack()
+            .push(OpCode::Constant(Immediate::StructDef(new_struct.into())));
 
-        if self.must_be_global(){
+        if self.must_be_global() {
             self.get_cur_stack().extend([
                 OpCode::SetGlobal(name.clone()),
-                OpCode::GetGlobal(name.clone())
+                OpCode::GetGlobal(name.clone()),
             ]);
-        } else{
+        } else {
             let local = self.symbol_table.mark(name.clone());
 
             self.get_cur_stack().extend([
@@ -650,8 +652,9 @@ impl StmtVisitor for Compiler {
 
         expr.init.accept(self)?;
 
-        if self.must_be_global(){
-            self.get_cur_stack().push(OpCode::SetGlobal(name.to_string()));
+        if self.must_be_global() {
+            self.get_cur_stack()
+                .push(OpCode::SetGlobal(name.to_string()));
         } else {
             let pos = self.symbol_table.mark(name.clone());
 
@@ -680,17 +683,15 @@ impl StmtVisitor for Compiler {
         compiled_result.arity = params.len();
         compiled_result.name = name.clone();
 
-        let set_opcode = if self.must_be_global(){
+        let set_opcode = if self.must_be_global() {
             OpCode::SetGlobal(name.clone())
-        } else{
+        } else {
             let local = self.symbol_table.mark(name.clone());
             OpCode::SetLocal(local as i32)
         };
 
-        self.get_cur_stack().extend([
-            OpCode::Constant(compiled_result.into()),
-            set_opcode 
-        ]);
+        self.get_cur_stack()
+            .extend([OpCode::Constant(compiled_result.into()), set_opcode]);
 
         Ok(())
     }

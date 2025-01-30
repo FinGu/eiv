@@ -1,0 +1,7 @@
+// do statements
+
+a = [1,2,3]
+
+do a += 4 if a.length == 3
+
+println(a)

@@ -20,7 +20,7 @@ mod vm;
 
 #[cfg(test)]
 mod tests;
-fn prompt_mode(vm: &mut VirtualMachine) -> InterpreterResult<()>{
+fn prompt_mode(vm: &mut VirtualMachine) -> InterpreterResult<()> {
     let mut symbol_table = SymbolTable::new();
 
     let stdin = io::stdin();
@@ -39,17 +39,17 @@ fn prompt_mode(vm: &mut VirtualMachine) -> InterpreterResult<()>{
 
                 s += "\n";
 
-                let (last_returned_value, used_st) = 
+                let (last_returned_value, used_st) =
                     utils::run_interpreter(symbol_table, vm, s, "<repl>", true)?;
 
                 symbol_table = used_st;
 
-                if last_returned_value.is_null(){
+                if last_returned_value.is_null() {
                     break 'match_ok_block;
                 }
 
-                if let Immediate::Function(ref fun) = last_returned_value{
-                    if fun.name.is_empty(){
+                if let Immediate::Function(ref fun) = last_returned_value {
+                    if fun.name.is_empty() {
                         break 'match_ok_block;
                     }
                 }
@@ -61,12 +61,11 @@ fn prompt_mode(vm: &mut VirtualMachine) -> InterpreterResult<()>{
         print!("> ");
         let _ = stdout.flush();
     }
-    
+
     Ok(())
 }
 
-
-fn main() -> InterpreterResult<()>{
+fn main() -> InterpreterResult<()> {
     let mut vm = VirtualMachine::new();
 
     prelude::include(&mut vm);
@@ -74,7 +73,7 @@ fn main() -> InterpreterResult<()>{
     let args: Vec<_> = env::args().collect();
 
     if args.len() <= 1 {
-        while prompt_mode(&mut vm).is_err(){}
+        while prompt_mode(&mut vm).is_err() {}
         return Ok(());
     }
 
