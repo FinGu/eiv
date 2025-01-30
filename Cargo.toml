@@ -4,6 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-enum-as-inner = "0.6.0"
-thiserror = "1.0.63"
-indexmap = "1.9.3"
+enum-as-inner = "0.6.1"
+thiserror = "2.0.11"
