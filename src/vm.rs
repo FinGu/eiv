@@ -715,12 +715,12 @@ impl VirtualMachine {
                     },
                 );
             },
-            OpCode::GetGlobal(name) => { // only ever used if in repl mode
+            OpCode::GetGlobal(name) => {
                 let global = self.globals.get(&name).cloned().unwrap_or(Immediate::Null);
 
                 self.stack.push(global.clone());
-            },
-            OpCode::SetGlobal(name) => {
+            }, 
+            OpCode::SetGlobal(name) => { // only ever used if in repl mode
                 let last = self.stack.pop().unwrap();
 
                 self.globals.insert(name, last);
