@@ -26,8 +26,12 @@ impl ErrorHandler {
         Immediate::Null
     }
 
-    pub fn report(&mut self) {
+    pub fn report(&mut self) -> bool {
+        let mut had_errors = false;
+
         for each in self.list.iter() {
+            had_errors = true;
+
             print!("Error detected: {}", each.0);
 
             if let Some(token) = &each.1 {
@@ -38,6 +42,8 @@ impl ErrorHandler {
         }
 
         self.list.clear();
+
+        had_errors
     }
 }
 

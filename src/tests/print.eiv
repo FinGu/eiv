@@ -1,7 +1,7 @@
 arr = {
     constructor = (arg){
         this.array = arg;
-    };
+    }
 
     _display_ = (){
         first = true;
@@ -14,8 +14,8 @@ arr = {
             print(this.array[i]); 
             first = false;
         }
-    };
-};
+    }
+}
 
 inst = arr([1,2,3]);
 

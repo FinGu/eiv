@@ -194,16 +194,18 @@ pub struct Compiler {
     loop_ctx: LoopContext,
 
     is_constructor: bool,
+    repl_mode: bool
 }
 
 impl Compiler {
-    pub fn new(symbol_table: SymbolTable) -> Self {
+    pub fn new(symbol_table: SymbolTable, repl_mode: bool) -> Self {
         Self {
             cur_struct_name: String::new(),
             cur_func: Function::default(),
             symbol_table,
             loop_ctx: LoopContext::default(),
             is_constructor: false,
+            repl_mode,
         }
     }
 
@@ -242,6 +244,10 @@ impl Compiler {
 
     pub fn get_cur_stack(&mut self) -> &mut Vec<OpCode> {
         &mut self.cur_func.code
+    }
+
+    fn must_be_global(&self) -> bool{
+        self.symbol_table.depth == 0 && self.repl_mode
     }
 }
 
@@ -353,7 +359,7 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
             new_sym_table.mark(param.clone());
         }
 
-        let mut new_compiler = Compiler::new(new_sym_table);
+        let mut new_compiler = Compiler::new(new_sym_table, self.compiler.repl_mode);
         new_compiler.cur_struct_name = self.name.to_string();
 
         //this is a trick in order to recognize if someone's trying to construct an instance of a
@@ -402,7 +408,9 @@ impl StmtVisitor for Compiler {
 
         our_expr.accept(self)?;
 
-        self.get_cur_stack().push(OpCode::Pop);
+        if !self.repl_mode{ // in repl mode we want the last stack value to be the printed
+            self.get_cur_stack().push(OpCode::Pop);
+        }
 
         Ok(())
     }
@@ -560,18 +568,26 @@ impl StmtVisitor for Compiler {
     fn visit_struct_stmt(&mut self, expr: &crate::ast::StructStmt) -> Self::Output {
         let name = expr.name.token_type.as_identifier().unwrap();
 
-        let local = self.symbol_table.mark(name.clone());
-
         let new_struct = RefCell::new(StructDef {
             name: name.clone(),
             ..Default::default()
         });
 
-        self.get_cur_stack().extend([
-            OpCode::Constant(Immediate::StructDef(new_struct.into())),
-            OpCode::SetLocal(local as i32),
-            OpCode::GetLocal(local as i32),
-        ]);
+        self.get_cur_stack().push(OpCode::Constant(Immediate::StructDef(new_struct.into())));
+
+        if self.must_be_global(){
+            self.get_cur_stack().extend([
+                OpCode::SetGlobal(name.clone()),
+                OpCode::GetGlobal(name.clone())
+            ]);
+        } else{
+            let local = self.symbol_table.mark(name.clone());
+
+            self.get_cur_stack().extend([
+                OpCode::SetLocal(local as i32),
+                OpCode::GetLocal(local as i32),
+            ]);
+        }
 
         let mut struct_compiler = StructCompiler::new(name, self);
 
@@ -602,7 +618,7 @@ impl StmtVisitor for Compiler {
 
         errors::LIST.lock().unwrap().report();
 
-        let mut parser = Parser::new(tokens, name.clone());
+        let mut parser = Parser::new(tokens, name);
 
         let statements = parser.work();
 
@@ -610,7 +626,7 @@ impl StmtVisitor for Compiler {
 
         let old_symbol_table = self.symbol_table.clone();
 
-        let mut comp = Compiler::new(old_symbol_table);
+        let mut comp = Compiler::new(old_symbol_table, self.repl_mode);
 
         let result = comp.work(statements).unwrap();
 
@@ -634,9 +650,13 @@ impl StmtVisitor for Compiler {
 
         expr.init.accept(self)?;
 
-        let pos = self.symbol_table.mark(name.clone());
+        if self.must_be_global(){
+            self.get_cur_stack().push(OpCode::SetGlobal(name.to_string()));
+        } else {
+            let pos = self.symbol_table.mark(name.clone());
 
-        self.get_cur_stack().push(OpCode::SetLocal(pos as i32));
+            self.get_cur_stack().push(OpCode::SetLocal(pos as i32));
+        }
 
         Ok(())
     }
@@ -654,17 +674,22 @@ impl StmtVisitor for Compiler {
             new_sym_table.mark(param.clone());
         }
 
-        let mut new_compiler = Compiler::new(new_sym_table);
+        let mut new_compiler = Compiler::new(new_sym_table, self.repl_mode);
 
         let mut compiled_result = new_compiler.work(expr.body.clone())?;
         compiled_result.arity = params.len();
         compiled_result.name = name.clone();
 
-        let local = self.symbol_table.mark(name.clone());
+        let set_opcode = if self.must_be_global(){
+            OpCode::SetGlobal(name.clone())
+        } else{
+            let local = self.symbol_table.mark(name.clone());
+            OpCode::SetLocal(local as i32)
+        };
 
         self.get_cur_stack().extend([
             OpCode::Constant(compiled_result.into()),
-            OpCode::SetLocal(local as i32),
+            set_opcode 
         ]);
 
         Ok(())

@@ -33,17 +33,17 @@ pub enum ParserError {
     BadGetExpr,
 }
 
-pub struct Parser {
+pub struct Parser<'a> {
     tokens: Vec<Token>,
-    file_name: String,
+    file_name: &'a str,
 
     cur: usize,
     loop_count: usize,
     fn_count: usize,
 }
 
-impl Parser {
-    pub fn new(tokens: Vec<Token>, file_name: String) -> Self {
+impl<'a> Parser<'a> {
+    pub fn new(tokens: Vec<Token>, file_name: &'a str) -> Self {
         Self {
             tokens,
             file_name,

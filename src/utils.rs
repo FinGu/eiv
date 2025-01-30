@@ -3,35 +3,50 @@ use crate::{
     errors,
     lexer::Lexer,
     parser::Parser,
-    vm::VirtualMachine,
+    vm::{Immediate, VirtualMachine, VirtualMachineError},
 };
+
+#[derive(thiserror::Error, Debug)]
+pub enum InterpreterError{
+    #[error("Error while lexing")]
+    Lexing,
+    #[error("Error while parsing")]
+    Parsing,
+    #[error("Error while running the program: {0}")]
+    VM(VirtualMachineError),
+}
+
+pub type InterpreterResult<T> = Result<T, InterpreterError>;
 
 pub fn run_interpreter(
     symbol_table: SymbolTable,
     vm: &mut VirtualMachine,
-    _str: String,
-    file_name: String,
-) -> SymbolTable {
-    let mut scanner = Lexer::new(_str);
+    file_contents: String,
+    file_name: &str,
+    repl_mode: bool
+) -> InterpreterResult<(Immediate, SymbolTable)>{
+    let mut scanner = Lexer::new(file_contents);
 
     let tokens = scanner.work();
 
-    errors::LIST.lock().unwrap().report();
+    if errors::LIST.lock().unwrap().report(){
+        return Err(InterpreterError::Lexing);
+    }
 
     let mut parser = Parser::new(tokens, file_name);
 
     let statements = parser.work();
 
-    errors::LIST.lock().unwrap().report();
+    if errors::LIST.lock().unwrap().report(){
+        return Err(InterpreterError::Parsing);
+    }
 
-    let mut comp = Compiler::new(symbol_table);
+    let mut comp = Compiler::new(symbol_table, repl_mode);
 
     let result = comp.work(statements).unwrap();
 
-    match vm.work(Some(result.into())) {
-        Ok(_) => {}
-        Err(e) => panic!("{}", e),
-    }
+    let ret = vm.work(Some(result.into()))
+        .map_err(InterpreterError::VM)?;
 
-    comp.symbol_table
+    Ok((ret, comp.symbol_table))
 }
