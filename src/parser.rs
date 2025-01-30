@@ -587,6 +587,7 @@ impl<'a> Parser<'a> {
         empty
     }
 
+    //this is syntax sugar for `if a { b }`
     pub fn get_do_statement(&mut self) -> Statement {
         let statement = self.get_declaration(false).unwrap();
 
