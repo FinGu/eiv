@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 enum-as-inner = "0.6.1"
+subenum = "1.1.2"
 thiserror = "2.0.11"

@@ -1,0 +1,4 @@
+abc = {
+}
+
+println(abc().dfg)

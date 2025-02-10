@@ -7,6 +7,7 @@ use std::{
 };
 
 use enum_as_inner::EnumAsInner;
+use subenum::subenum;
 
 use crate::prelude;
 use crate::{
@@ -344,6 +345,7 @@ impl Immediate {
     }
 }
 
+#[subenum(DeclOpCode)]
 #[derive(Debug, Clone, EnumAsInner)]
 pub enum OpCode {
     Pop,
@@ -351,12 +353,18 @@ pub enum OpCode {
 
     Not,
     Negate,
-    Add,
-    Subtract,
-    Multiply,
-    Divide,
 
+    #[subenum(DeclOpCode)]
+    Add,
+    #[subenum(DeclOpCode)]
+    Subtract,
+    #[subenum(DeclOpCode)]
+    Multiply,
+    #[subenum(DeclOpCode)]
+    Divide,
+    #[subenum(DeclOpCode)]
     Equal,
+
     NotEqual,
     Greater,
     GreaterEqual,
@@ -390,7 +398,7 @@ pub enum OpCode {
 
     GetProp(String),
     GetStaticProp(String),
-    SetProp(String, Box<OpCode>),
+    SetProp(String, DeclOpCode),
     //these are for struct instances
     CaptureArray(i32),
 
@@ -773,11 +781,11 @@ impl VirtualMachine {
                         let new_data = match old_data {
                             Immediate::Null => rvalue,
 
-                            old_value => match *op {
-                                OpCode::Add => old_value + rvalue,
-                                OpCode::Multiply => old_value * rvalue,
-                                OpCode::Divide => old_value / rvalue,
-                                OpCode::Subtract => old_value - rvalue,
+                            old_value => match op {
+                                DeclOpCode::Add => old_value + rvalue,
+                                DeclOpCode::Multiply => old_value * rvalue,
+                                DeclOpCode::Divide => old_value / rvalue,
+                                DeclOpCode::Subtract => old_value - rvalue,
                                 _ => rvalue,
                             },
                         };

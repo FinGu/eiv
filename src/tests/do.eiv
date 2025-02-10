@@ -1,7 +1,11 @@
 // do statements
 
-a = [1,2,3]
+a = [1,2,0]
+sum = 0
 
-do a += 4 if a.length == 3
+for i = 0; i < a.length; i += 1{
+    sum += i
+    do a[i] = sum if i == a.length-1
+}
 
 println(a)

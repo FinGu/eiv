@@ -7,7 +7,7 @@ use crate::{
     errors,
     lexer::{Lexer, TokenType},
     parser::Parser,
-    vm::{Immediate, OpCode},
+    vm::{DeclOpCode, Immediate, OpCode},
 };
 
 #[derive(Clone, Debug, Default)]
@@ -459,14 +459,14 @@ impl StmtVisitor for Compiler {
 
         self.get_cur_stack().push(OpCode::SetProp(
             name,
-            Box::new(match expr.op.token_type {
-                TokenType::PlusEqual => OpCode::Add,
-                TokenType::StarEqual => OpCode::Multiply,
-                TokenType::MinusEqual => OpCode::Subtract,
-                TokenType::SlashEqual => OpCode::Divide,
+            match expr.op.token_type {
+                TokenType::PlusEqual => DeclOpCode::Add,
+                TokenType::StarEqual => DeclOpCode::Multiply,
+                TokenType::MinusEqual => DeclOpCode::Subtract,
+                TokenType::SlashEqual => DeclOpCode::Divide,
                 //TokenType::PercentageEqual => OpCode::Modulus
-                _ => OpCode::Equal,
-            }),
+                _ => DeclOpCode::Equal,
+            },
         ));
 
         Ok(())
