@@ -10,6 +10,7 @@ use enum_as_inner::EnumAsInner;
 use subenum::subenum;
 
 use crate::prelude;
+
 use crate::{
     compiler::{Function, StructDef},
     prelude::Callable,
@@ -400,7 +401,7 @@ pub enum OpCode {
     GetStaticProp(String),
     SetProp(String, DeclOpCode),
     //these are for struct instances
-    CaptureArray(i32),
+    CaptureArray(i32, usize),
 
     Call(i32),
 
@@ -727,8 +728,7 @@ impl VirtualMachine {
 
                 self.stack.push(global.clone());
             }
-            OpCode::SetGlobal(name) => {
-                // only ever used if in repl mode
+            OpCode::SetGlobal(name) => { // only ever used if in repl mode
                 let last = self.stack.pop().unwrap();
 
                 self.globals.insert(name, last);
@@ -750,10 +750,9 @@ impl VirtualMachine {
                         self.stack.push(bound_data);
                     }
                     Immediate::Array(ref arr) => {
-                        self.stack.push(if name == "length" {
-                            Immediate::Number(arr.as_ref().borrow().len() as f64)
-                        } else {
-                            Immediate::Null
+                        self.stack.push(match name.as_str(){
+                            "length" => Immediate::Number(arr.as_ref().borrow().len() as f64),
+                            _ => Immediate::Null
                         });
                     }
                     _ => return Err(VirtualMachineError::GetNotInstance),
@@ -851,13 +850,11 @@ impl VirtualMachine {
             OpCode::Jump(offset) => {
                 self.inc_ip(offset);
             }
-            OpCode::CaptureArray(mut arg_count) => {
-                let mut array: Vec<Immediate> = Vec::new();
+            OpCode::CaptureArray(arg_count, size) => {
+                let mut array = vec![Immediate::Null; size];
 
-                while arg_count > 0 {
+                for _ in 0..arg_count{
                     array.push(self.stack.pop().unwrap());
-
-                    arg_count -= 1;
                 }
 
                 array.reverse();

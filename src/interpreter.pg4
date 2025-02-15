@@ -51,7 +51,9 @@ unary: ('!' | '-' ) unary | cast;
 cast_type: 'number' | 'char' | 'bool';
 cast: call ('as' cast_type)*;
 
-call: primary ('[' expression ']' | '(' arguments? ')' | '.' IDENTIFIER | '::' IDENTIFIER)*; 
+call: primary (arr_primary | '(' arguments? ')' | '.' IDENTIFIER | '::' IDENTIFIER)*; 
+
+arr_primary: '[' expression ']' ('|' NUMBER)?
 
 primary: NUMBER | STRING | 'true' | 'false' | 'null' | 'this' | '(' expression ')' | '[' arguments? ']' | IDENTIFIER;
 

@@ -777,7 +777,13 @@ impl ExprVisitor for Compiler {
             arg_amount += 1;
         }
 
-        self.get_cur_stack().push(OpCode::CaptureArray(arg_amount));
+        let size = expr.size
+            .as_ref()
+            .and_then(|s| s.token_type.as_number())
+            .cloned()
+            .unwrap_or(0.0) as usize;
+
+        self.get_cur_stack().push(OpCode::CaptureArray(arg_amount, size));
 
         Ok(())
     }

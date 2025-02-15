@@ -1,0 +1,9 @@
+cap = [0,1,2]|123
+
+println(cap)
+
+for i = 2; i < cap.length; i += 1{
+    cap[i] = i
+}
+
+println(cap)

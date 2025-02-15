@@ -426,11 +426,12 @@ impl BinaryExpr {
 #[derive(Clone, Debug)]
 pub struct ArrayExpr {
     pub exprs: Vec<Expression>,
+    pub size: Option<Token>,
 }
 
 impl ArrayExpr {
-    pub fn new(exprs: Vec<Expression>) -> Self {
-        Self { exprs }
+    pub fn new(exprs: Vec<Expression>, size: Option<Token>) -> Self {
+        Self { exprs, size }
     }
 }
 

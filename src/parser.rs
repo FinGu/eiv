@@ -135,6 +135,34 @@ impl<'a> Parser<'a> {
 
         None
     }
+    
+    pub fn get_arr_primary(&mut self, display_errors: bool) -> Expression{
+        let mut exprs = Vec::new();
+
+        if self.match_tokens(&[TokenType::RightBracket]) {
+            //empty array
+            
+            return ArrayExpr::new(exprs, if self.match_tokens(&[TokenType::Pipe]){
+                Some(self.next().clone())
+            } else{
+                None
+            }).into();
+        }
+
+        exprs.push(self.get_expression(display_errors));
+
+        while self.match_tokens(&[TokenType::Comma]) {
+            exprs.push(self.get_expression(display_errors));
+        }
+
+        self.expect_next(TokenType::RightBracket, display_errors);
+
+        ArrayExpr::new(exprs, if self.match_tokens(&[TokenType::Pipe]){
+            Some(self.next().clone())
+        } else{
+            None
+        }).into()
+    }
 
     pub fn get_primary(&mut self, display_errors: bool) -> Option<Expression> {
         if self.match_tokens(&[TokenType::Null]) {
@@ -183,22 +211,7 @@ impl<'a> Parser<'a> {
         }
 
         if self.match_tokens(&[TokenType::LeftBracket]) {
-            let mut exprs = Vec::new();
-
-            if self.match_tokens(&[TokenType::RightBracket]) {
-                //empty array
-                return Some(ArrayExpr::new(exprs).into());
-            }
-
-            exprs.push(self.get_expression(display_errors));
-
-            while self.match_tokens(&[TokenType::Comma]) {
-                exprs.push(self.get_expression(display_errors));
-            }
-
-            self.expect_next(TokenType::RightBracket, display_errors);
-
-            return Some(ArrayExpr::new(exprs).into());
+            return Some(self.get_arr_primary(display_errors));
         }
 
         if let TokenType::Identifier(_) = cur_tok.token_type {
