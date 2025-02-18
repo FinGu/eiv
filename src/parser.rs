@@ -135,18 +135,22 @@ impl<'a> Parser<'a> {
 
         None
     }
-    
-    pub fn get_arr_primary(&mut self, display_errors: bool) -> Expression{
+
+    pub fn get_arr_primary(&mut self, display_errors: bool) -> Expression {
         let mut exprs = Vec::new();
 
         if self.match_tokens(&[TokenType::RightBracket]) {
             //empty array
-            
-            return ArrayExpr::new(exprs, if self.match_tokens(&[TokenType::Pipe]){
-                Some(self.next().clone())
-            } else{
-                None
-            }).into();
+
+            return ArrayExpr::new(
+                exprs,
+                if self.match_tokens(&[TokenType::Pipe]) {
+                    Some(self.next().clone())
+                } else {
+                    None
+                },
+            )
+            .into();
         }
 
         exprs.push(self.get_expression(display_errors));
@@ -157,11 +161,15 @@ impl<'a> Parser<'a> {
 
         self.expect_next(TokenType::RightBracket, display_errors);
 
-        ArrayExpr::new(exprs, if self.match_tokens(&[TokenType::Pipe]){
-            Some(self.next().clone())
-        } else{
-            None
-        }).into()
+        ArrayExpr::new(
+            exprs,
+            if self.match_tokens(&[TokenType::Pipe]) {
+                Some(self.next().clone())
+            } else {
+                None
+            },
+        )
+        .into()
     }
 
     pub fn get_primary(&mut self, display_errors: bool) -> Option<Expression> {

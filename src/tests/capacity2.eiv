@@ -1,0 +1,2 @@
+a = []|123
+for i = 0; i < a.length; i += 1 { a[i] = i; }

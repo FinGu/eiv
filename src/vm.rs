@@ -726,12 +726,17 @@ impl VirtualMachine {
             OpCode::GetGlobal(name) => {
                 let global = self.globals.get(&name).cloned().unwrap_or(Immediate::Null);
 
-                self.stack.push(global.clone());
+                self.stack.push(global);
             }
-            OpCode::SetGlobal(name) => { // only ever used if in repl mode
-                let last = self.stack.pop().unwrap();
+            OpCode::SetGlobal(name) => {
+                // only ever used if in repl mode
+                let last = self.stack.last().unwrap();
 
-                self.globals.insert(name, last);
+                self.globals.insert(name, if let Immediate::Array(ref arr) = last {
+                    arr.as_ref().borrow().clone().into()
+                } else {
+                    last.clone()
+                });
             }
             OpCode::GetProp(name) => {
                 let last = self.stack.pop().unwrap();
@@ -750,9 +755,9 @@ impl VirtualMachine {
                         self.stack.push(bound_data);
                     }
                     Immediate::Array(ref arr) => {
-                        self.stack.push(match name.as_str(){
+                        self.stack.push(match name.as_str() {
                             "length" => Immediate::Number(arr.as_ref().borrow().len() as f64),
-                            _ => Immediate::Null
+                            _ => Immediate::Null,
                         });
                     }
                     _ => return Err(VirtualMachineError::GetNotInstance),
@@ -853,7 +858,7 @@ impl VirtualMachine {
             OpCode::CaptureArray(arg_count, size) => {
                 let mut array = vec![Immediate::Null; size];
 
-                for _ in 0..arg_count{
+                for _ in 0..arg_count {
                     array.push(self.stack.pop().unwrap());
                 }
 
