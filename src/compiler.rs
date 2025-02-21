@@ -1,5 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, fs};
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     ast::{
         Accept, ControlFlowType, ElseStmt, ExprVisitor, FnStmt, LiteralExpr, Statement, StmtVisitor,
@@ -10,14 +12,14 @@ use crate::{
     vm::{DeclOpCode, Immediate, OpCode},
 };
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Function {
     pub name: String,
     pub arity: usize,
     pub code: Vec<OpCode>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct StructDef {
     pub name: String,
     pub normal_data: HashMap<String, Immediate>,

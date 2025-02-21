@@ -6,6 +6,8 @@ use std::{
     rc::Rc,
 };
 
+use serde::{Serialize, Deserialize};
+
 use enum_as_inner::EnumAsInner;
 use subenum::subenum;
 
@@ -20,7 +22,7 @@ type WrappedStructDef = Rc<RefCell<StructDef>>;
 type WrappedStructInst = Rc<RefCell<StructInst>>;
 type WrappedVec = Rc<RefCell<Vec<Immediate>>>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StructInst {
     pub from: WrappedStructDef,
     pub data: HashMap<String, Immediate>,
@@ -75,7 +77,7 @@ impl CallFrame {
 
 type BoundFunction = Box<(Rc<Function>, Immediate)>;
 
-#[derive(Clone, Debug, EnumAsInner)]
+#[derive(Clone, Debug, Serialize, Deserialize, EnumAsInner)]
 pub enum Immediate {
     Number(f64),
     Char(u8),
@@ -347,7 +349,7 @@ impl Immediate {
 }
 
 #[subenum(DeclOpCode)]
-#[derive(Debug, Clone, EnumAsInner)]
+#[derive(Debug, Clone, Serialize, Deserialize, EnumAsInner)]
 pub enum OpCode {
     Pop,
     Return,

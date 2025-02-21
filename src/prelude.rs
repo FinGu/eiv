@@ -1,10 +1,10 @@
 use std::{fmt::Debug, rc::Rc};
 
-use crate::{
-    vm::{Immediate, VMResult},
-    VirtualMachine,
-};
+use serde::{Deserialize, Serialize};
 
+use crate::vm::{Immediate, VMResult, VirtualMachine};
+
+#[typetag::serde(tag = "type")]
 pub trait Callable: Sync + Send {
     fn call(&self, vm: &mut VirtualMachine, params: usize) -> VMResult<Immediate>;
 
@@ -17,9 +17,10 @@ impl Debug for dyn Callable {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct Print;
 
+#[typetag::serde]
 impl Callable for Print {
     fn name(&self) -> String {
         "print".to_owned()
@@ -52,9 +53,10 @@ impl Callable for Print {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct PrintLn;
 
+#[typetag::serde]
 impl Callable for PrintLn {
     fn name(&self) -> String {
         "println".to_owned()
@@ -71,9 +73,10 @@ impl Callable for PrintLn {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct _TypeOf;
 
+#[typetag::serde]
 impl Callable for _TypeOf {
     fn call(&self, vm: &mut VirtualMachine, _: usize) -> VMResult<Immediate> {
         let arg = vm.stack.last().unwrap();
@@ -104,9 +107,10 @@ impl Callable for _TypeOf {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct TypeOf;
 
+#[typetag::serde]
 impl Callable for TypeOf {
     fn call(&self, vm: &mut VirtualMachine, params: usize) -> VMResult<Immediate> {
         let arg = vm.stack.last().unwrap();

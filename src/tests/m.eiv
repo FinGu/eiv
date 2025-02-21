@@ -2,7 +2,7 @@ include "string.eiv"
 
 texto = string("abc")
 
-texto2 = string("dfg")
+texto2 = string("abc")
 
 if texto == texto2{
     println(string("eh igual"))
