@@ -103,7 +103,7 @@ fn main() -> EivResult<()> {
                         utils::run_bytecode(&mut vm, &file)?;
 
                         return Ok(());
-                    }
+                    } 
 
                     let file = fs::read_to_string(&path)
                         .map_err(|_| EivError::InvalidFilePath)?;

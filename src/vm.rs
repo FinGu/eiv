@@ -145,7 +145,7 @@ impl Display for Immediate {
             ),
             Self::Function(fun) => write!(f, "{} function", fun.name),
             _ => {
-                unimplemented!()
+                write!(f, "null")
             }
         }
     }

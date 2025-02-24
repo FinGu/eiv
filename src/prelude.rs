@@ -133,6 +133,37 @@ impl Callable for TypeOf {
     }
 }
 
+#[derive(Deserialize, Serialize, Clone)]
+pub struct _Pow;
+
+#[typetag::serde]
+impl Callable for _Pow {
+    fn call(&self, vm: &mut VirtualMachine, params: usize) -> VMResult<Immediate> {
+        let len = vm.stack.len();
+
+        if params != 2{
+            return Ok(Immediate::Null);
+        }
+
+        let arg2 = &vm.stack[len-1];
+
+        let arg1 = &vm.stack[len-2];
+
+        match (arg1.as_number(), arg2.as_number()) {
+            (Some(base_num), Some(exponent_num)) => {
+                Ok(Immediate::Number(base_num.powf(*exponent_num)))
+            }
+            _ => Ok(Immediate::Null),
+        }
+    }
+
+    fn name(&self) -> String {
+        //until i write an interface to prelude more complex relationships such as namespaces, this is builtin
+        //math::pow()
+        "_pow".into()
+    }
+}
+
 fn insert(vm: &mut VirtualMachine, callable: Rc<dyn Callable>) {
     vm.globals
         .insert(callable.name(), Immediate::GlobalFunction(callable));
@@ -150,6 +181,7 @@ pub fn include(vm: &mut VirtualMachine) {
         Rc::new(PrintLn),
         Rc::new(_TypeOf),
         Rc::new(TypeOf),
+        Rc::new(_Pow)
     ];
 
     gfuncs.into_iter().for_each(|each| insert(vm, each));
