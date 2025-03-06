@@ -325,6 +325,7 @@ impl<'a> Parser<'a> {
             TokenType::BoolCast,
             TokenType::CharCast,
             TokenType::NumberCast,
+            TokenType::IndexCast,
         ]) {
             let prev = self.previous().clone();
 

@@ -85,6 +85,7 @@ pub enum TokenType {
     BoolCast,
     NumberCast,
     CharCast,
+    IndexCast,
 
     EOF,
 }
@@ -174,6 +175,7 @@ impl TryFrom<&str> for TokenType {
             "number" => TokenType::NumberCast,
             "bool" => TokenType::BoolCast,
             "char" => TokenType::CharCast,
+            "index" => TokenType::IndexCast,
             _ => return Err(()),
         })
     }

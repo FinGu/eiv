@@ -743,6 +743,7 @@ impl ExprVisitor for Compiler {
             TokenType::BoolCast => OpCode::BoolCast,
             TokenType::CharCast => OpCode::CharCast,
             TokenType::NumberCast => OpCode::NumberCast,
+            TokenType::IndexCast => OpCode::IndexCast,
             _ => unreachable!(),
         });
         Ok(())

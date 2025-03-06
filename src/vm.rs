@@ -340,6 +340,13 @@ impl Immediate {
         }
     }
 
+    pub fn cast_to_index(&self) -> Self{
+        match *self{
+            Self::Number(n) => Self::Number(n.round()),
+            _ => self.cast_to_number().cast_to_index()
+        }
+    }
+
     pub fn cast_to_char(&self) -> Self {
         match *self {
             Self::Char(c) => Self::Char(c),
@@ -380,6 +387,7 @@ pub enum OpCode {
     BoolCast,
     NumberCast,
     CharCast,
+    IndexCast,
 
     JumpIfFalse(i32),
 
@@ -704,6 +712,11 @@ impl VirtualMachine {
                 let popped = self.stack.pop().unwrap();
 
                 self.stack.push(popped.cast_to_char());
+            },
+            OpCode::IndexCast => {
+                let popped = self.stack.pop().unwrap();
+
+                self.stack.push(popped.cast_to_index());
             }
             OpCode::Constant(c) => {
                 self.stack.push(c.clone());
