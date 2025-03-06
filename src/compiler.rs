@@ -551,8 +551,8 @@ impl StmtVisitor for Compiler {
         for (pos, kind) in loop_data.opcodes {
             if let OpCode::Jump(ref mut imm) = self.get_cur_stack()[pos] {
                 *imm = match kind {
-                    LoopStmtType::Continue => loop_data.continuee - pos as i32,
-                    LoopStmtType::Break => loop_data.breakk - pos as i32,
+                    LoopStmtType::Continue => (loop_data.continuee - pos as i32 - 1) as i32,
+                    LoopStmtType::Break => (loop_data.breakk - pos as i32 - 1) as i32,
                 }
             }
         }

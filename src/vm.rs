@@ -342,7 +342,7 @@ impl Immediate {
 
     pub fn cast_to_index(&self) -> Self{
         match *self{
-            Self::Number(n) => Self::Number(n.round()),
+            Self::Number(n) => Self::Number(n.floor()),
             _ => self.cast_to_number().cast_to_index()
         }
     }

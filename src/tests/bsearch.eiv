@@ -1,0 +1,28 @@
+arr = [1,1,2,3,5,8,13,24]
+
+bin_search = (arr, to_find){
+    low = 0
+    high = arr.length - 1
+
+    while low <= high{
+        mid = ((low+high)/2) as index
+
+        if arr[mid] == to_find{
+            return mid
+        }
+
+        if arr[mid] < to_find{
+            low = mid + 1
+            continue
+        } 
+
+        if arr[mid] > to_find{
+            high = mid - 1
+            continue
+        }
+    }
+
+    return -1
+}
+
+println(bin_search(arr, 14))
