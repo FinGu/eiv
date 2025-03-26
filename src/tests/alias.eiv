@@ -1,0 +1,3 @@
+#pow: _pow#
+
+println(pow(4,5))
