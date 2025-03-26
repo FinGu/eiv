@@ -330,10 +330,6 @@ impl<'a> StmtVisitor for StructCompiler<'a> {
         Ok(())
     }
 
-    fn visit_include_stmt(&mut self, expr: &crate::ast::IncludeStmt) -> Self::Output {
-        expr.accept(self.compiler)
-    }
-
     fn visit_variable_stmt(&mut self, expr: &crate::ast::VarStmt) -> Self::Output {
         let name = expr.name.token_type.as_identifier().unwrap();
 
@@ -606,7 +602,7 @@ impl StmtVisitor for Compiler {
         Ok(())
     }
 
-    fn visit_include_stmt(&mut self, expr: &crate::ast::IncludeStmt) -> Self::Output {
+    /*fn visit_include_stmt(&mut self, expr: &crate::ast::IncludeStmt) -> Self::Output {
         let name = &expr.file;
 
         let inner = match fs::read_to_string(name) {
@@ -647,7 +643,7 @@ impl StmtVisitor for Compiler {
         //nop and return
 
         Ok(())
-    }
+    }*/
 
     fn visit_variable_stmt(&mut self, expr: &crate::ast::VarStmt) -> Self::Output {
         let name = expr.name.token_type.as_identifier().unwrap();

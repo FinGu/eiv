@@ -2,9 +2,11 @@ grammar interpreter;
 
 program: declaration* EOF;
 
-declaration: either_declaration EOS | statement;
+declaration: call_declaration EOS | statement;
 
-call_declaration: call? either_declaration;
+call_declaration: call either_declaration | full_either_declaration;
+
+full_either_declaration: IDENTIFIER either_declaration;
 
 either_declaration: normal_declaration | shorthand_declaration;
 
@@ -13,7 +15,6 @@ normal_declaration: '=' (fn_declaration | class_declaration | array_declaration 
 shorthand_declaration: ('+=' | '-=' | '*=' | '/=')expression;
 
 function_lim_declaration: 'stat'? IDENTIFIER '=' fn_declaration;
-
 class_declaration: '{' function_lim_declaration* '}';
 
 arguments: expression (','expression)*;
@@ -22,22 +23,44 @@ array_declaration: '[' arguments? ']';
 fn_declaration: '(' fn_parameters? ')' block;
 fn_parameters: IDENTIFIER (',' IDENTIFIER )*;
 
-statement: expression_stmt | block | if_stmt | while_stmt | break_stmt | continue_stmt | return_stmt | break_stmt | include_stmt | do_stmt;
+statement: expression_stmt | block | if_stmt | while_stmt | break_stmt | continue_stmt | return_stmt | break_stmt | do_stmt;
 
 expression_stmt: expression EOS;
 
-block: '{' declaration* '}';
+block: '{' declaration* '}';#[derive(Clone, Debug)]
+pub struct VarStmt {
+    pub name: Token,
+    pub init: Expression,
+    pub is_static: bool,
+}
+
+impl VarStmt {
+    pub fn new(name: Token, init: Expression) -> Self {
+        Self {
+            name,
+            init,
+            is_static: false,
+        }
+    }
+}
+
+impl From<VarStmt> for Statement {
+    fn from(value: VarStmt) -> Self {
+        Self::Variable(Box::new(value))
+    }
+}
+
+
 
 if_stmt: 'if' expression block ('else' (if_stmt | block))?;
 
 while_stmt: 'while' expression block;
 
-for_stmt: 'for' either_declaration? EOS expression? EOS either_declaration? block;
+for_stmt: 'for' full_either_declaration? EOS expression? EOS full_either_declaration? block;
 
 break_stmt 'break' EOS;
 continue_stmt 'continue' EOS;
 return_stmt: 'return' expression EOS;
-include_stmt: 'include' (STRING | '<' IDENTIFIER '>') EOS;
 do_stmt: 'do' declaration 'if' expression EOS;
 
 expression: equality (('&&' | '||') equality)*;

@@ -1,15 +1,15 @@
-use std::fs::File;
-
 use bincode::ErrorKind;
 
 use crate::{
-    ast::Statement, compiler::{Compiler, CompilerError, Function, SymbolTable}, errors, lexer::Lexer, parser::Parser, vm::{Immediate, OpCode, VirtualMachine, VirtualMachineError}
+    ast::Statement, compiler::{Compiler, CompilerError, Function, SymbolTable}, errors, lexer::Lexer, parser::Parser, preprocessor::{self, Preprocessor, PreprocessorError}, vm::{Immediate, OpCode, VirtualMachine, VirtualMachineError}
 };
 
 #[derive(thiserror::Error, Debug)]
 pub enum EivError{
     #[error("Invalid file path")]
     InvalidFilePath,
+    #[error("Error while preprocessing")]
+    Preprocessing(#[from] PreprocessorError),
     #[error("Error while lexing")]
     Lexing,
     #[error("Error while parsing")]
@@ -24,7 +24,13 @@ pub enum EivError{
 
 pub type EivResult<T> = Result<T, EivError>;
 
-pub fn lex_and_parse(file_name: &str, file_contents: String) -> EivResult<Vec<Statement>>{
+pub fn preprocess(file_name: String, file_contents: String) -> EivResult<String>{
+    let mut handler = Preprocessor::new(file_name);
+
+    Ok(handler.work(file_contents)?)
+}
+
+pub fn lex_and_parse(file_contents: String) -> EivResult<Vec<Statement>>{
     let mut scanner = Lexer::new(file_contents);
 
     let tokens = scanner.work();
@@ -33,7 +39,7 @@ pub fn lex_and_parse(file_name: &str, file_contents: String) -> EivResult<Vec<St
         return Err(EivError::Lexing);
     }
 
-    let mut parser = Parser::new(tokens, file_name);
+    let mut parser = Parser::new(tokens);
 
     let statements = parser.work();
 
@@ -52,12 +58,14 @@ pub fn compile(symbol_table: SymbolTable, statements: Vec<Statement>, repl_mode:
 
 pub fn run_compiler(
     symbol_table: SymbolTable,
+    file_name: String,
     file_contents: String,
-    file_name: &str,
     embed_mode: bool,
     output: Option<String>
 ) -> EivResult<()>{
-    let statements = lex_and_parse(file_name, file_contents)?;
+    let preprocessed = preprocess(file_name, file_contents)?;
+
+    let statements = lex_and_parse(preprocessed)?;
 
     let (function, _) = compile(symbol_table, statements, false)?;
 
@@ -96,12 +104,14 @@ pub fn run_bytecode(
 
 pub fn run_interpreter(
     symbol_table: SymbolTable,
+    preprocessor: &mut Preprocessor,
     vm: &mut VirtualMachine,
-    file_contents: String,
-    file_name: &str,
+    contents: String,
     repl_mode: bool,
 ) -> EivResult<(Immediate, SymbolTable)> {
-    let statements = lex_and_parse(file_name, file_contents)?;
+    let contents = preprocessor.work(contents)?; 
+
+    let statements = lex_and_parse(contents)?;
 
     let (function, st) = compile(symbol_table, statements, repl_mode)?;
 

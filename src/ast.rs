@@ -120,7 +120,6 @@ pub trait StmtVisitor {
     fn visit_for_stmt(&mut self, expr: &ForStmt) -> Self::Output;
 
     fn visit_ctrl_stmt(&mut self, expr: &CtrlStmt) -> Self::Output;
-    fn visit_include_stmt(&mut self, expr: &IncludeStmt) -> Self::Output;
 
     fn visit_set_stmt(&mut self, expr: &SetStmt) -> Self::Output;
     fn visit_array_set_stmt(&mut self, expr: &ArraySetStmt) -> Self::Output;
@@ -137,7 +136,6 @@ pub enum Statement {
     Function(Box<FnStmt>),
     Struct(Box<StructStmt>),
     ControlFlow(Box<CtrlStmt>),
-    Include(Box<IncludeStmt>),
     Set(Box<SetStmt>),
     ArraySet(Box<ArraySetStmt>),
 }
@@ -302,23 +300,6 @@ impl CtrlStmt {
 impl From<CtrlStmt> for Statement {
     fn from(value: CtrlStmt) -> Self {
         Statement::ControlFlow(Box::new(value))
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct IncludeStmt {
-    pub file: String,
-}
-
-impl IncludeStmt {
-    pub fn new(file: String) -> Self {
-        Self { file }
-    }
-}
-
-impl From<IncludeStmt> for Statement {
-    fn from(value: IncludeStmt) -> Self {
-        Statement::Include(Box::new(value))
     }
 }
 
@@ -681,17 +662,6 @@ where
     }
 }
 
-impl<Visitor, T> Accept<Visitor> for IncludeStmt
-where
-    Visitor: StmtVisitor<Output = T>,
-{
-    type Output = T;
-
-    fn accept(&self, visitor: &mut Visitor) -> Self::Output {
-        visitor.visit_include_stmt(self)
-    }
-}
-
 impl<Visitor, T> Accept<Visitor> for VarExpr
 where
     Visitor: ExprVisitor<Output = T>,
@@ -899,7 +869,6 @@ where
             Statement::Struct(ref strct) => strct.accept(visitor),
             Statement::Set(ref set) => set.accept(visitor),
             Statement::ArraySet(ref arrset) => arrset.accept(visitor),
-            Statement::Include(ref incl) => incl.accept(visitor),
         }
     }
 }

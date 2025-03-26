@@ -1,4 +1,4 @@
-include "string.eiv"
+#include: string.eiv#
 
 struct_def = {
     constructor = (string){ 

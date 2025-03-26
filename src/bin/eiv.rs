@@ -6,6 +6,8 @@ use clap::{Parser, Subcommand};
 
 use eiv::compiler::SymbolTable;
 use eiv::prelude;
+use eiv::preprocessor;
+use eiv::preprocessor::Preprocessor;
 use eiv::utils;
 use eiv::utils::{EivResult, EivError};
 use eiv::vm::Immediate;
@@ -34,7 +36,7 @@ enum Commands{
     },
 }
 
-fn prompt_mode(vm: &mut VirtualMachine) -> EivResult<()> {
+fn prompt_mode(preprocessor: &mut Preprocessor, vm: &mut VirtualMachine) -> EivResult<()> {
     let mut symbol_table = SymbolTable::new();
 
     let stdin = io::stdin();
@@ -54,7 +56,7 @@ fn prompt_mode(vm: &mut VirtualMachine) -> EivResult<()> {
                 s += "\n";
 
                 let (last_returned_value, used_st) =
-                    utils::run_interpreter(symbol_table, vm, s, "<repl>", true)?;
+                    utils::run_interpreter(symbol_table, preprocessor, vm, s, true)?;
 
                 symbol_table = used_st;
 
@@ -80,6 +82,7 @@ fn prompt_mode(vm: &mut VirtualMachine) -> EivResult<()> {
 }
 
 fn main() -> EivResult<()> {
+    let mut preprocessor = Preprocessor::new("<repl>".into());
     let mut vm = VirtualMachine::new();
 
     prelude::include(&mut vm);
@@ -88,7 +91,7 @@ fn main() -> EivResult<()> {
 
     match cmds{
         None => {
-            while prompt_mode(&mut vm).is_err() {}
+            while prompt_mode(&mut preprocessor, &mut vm).is_err() {}
             return Ok(());
         },
         Some(cmds) => {
@@ -108,13 +111,15 @@ fn main() -> EivResult<()> {
                     let file = fs::read_to_string(&path)
                         .map_err(|_| EivError::InvalidFilePath)?;
 
-                    utils::run_interpreter(symbol_table, &mut vm, file, &path, false)?;
+                    preprocessor.set_file_name(path);
+
+                    utils::run_interpreter(symbol_table, &mut preprocessor, &mut vm, file, false)?;
                 },
                 Commands::Compile { path, output, embed } => {
                     let file = fs::read_to_string(&path)
                         .map_err(|_| EivError::InvalidFilePath)?;
 
-                    utils::run_compiler(symbol_table, file, &path, embed, output)?;
+                    utils::run_compiler(symbol_table, file, path, embed, output)?;
                 }
             }
         }

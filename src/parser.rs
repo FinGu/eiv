@@ -2,7 +2,7 @@ use crate::{
     ast::{
         ArrayExpr, ArrayGetExpr, ArraySetStmt, BinaryExpr, CallExpr, CastExpr, ControlFlowType,
         CtrlStmt, ElseStmt, Expression, FnStmt, ForStmt, GetExpr, GroupingExpr, IfStmt,
-        IncludeStmt, LiteralExpr, SetStmt, Statement, StructStmt, ThisExpr, UnaryExpr, VarExpr,
+        LiteralExpr, SetStmt, Statement, StructStmt, ThisExpr, UnaryExpr, VarExpr,
         VarStmt, WhileStmt,
     },
     errors,
@@ -33,20 +33,18 @@ pub enum ParserError {
     BadGetExpr,
 }
 
-pub struct Parser<'a> {
+pub struct Parser {
     tokens: Vec<Token>,
-    file_name: &'a str,
 
     cur: usize,
     loop_count: usize,
     fn_count: usize,
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(tokens: Vec<Token>, file_name: &'a str) -> Self {
+impl Parser {
+    pub fn new(tokens: Vec<Token>) -> Self {
         Self {
             tokens,
-            file_name,
 
             cur: 0,
             loop_count: 0,
@@ -573,42 +571,6 @@ impl<'a> Parser<'a> {
         CtrlStmt::new(ControlFlowType::Return(expr)).into()
     }
 
-    pub fn get_include_statement(&mut self) -> Statement {
-        if self.in_fn() || self.in_loop() {
-            errors::LIST.lock().unwrap().push(
-                ParserError::IncludeOutsideMainScope,
-                Some(self.peek().clone()),
-            );
-        }
-
-        let cur_tok = self.peek().clone();
-
-        let empty = IncludeStmt::new(String::new()).into();
-
-        if let TokenType::String(ref str_) = cur_tok.token_type {
-            self.cur += 1;
-
-            if *str_ == self.file_name {
-                errors::LIST
-                    .lock()
-                    .unwrap()
-                    .push(ParserError::CantIncludeItself, Some(cur_tok));
-                return empty;
-            }
-
-            self.expect_next(TokenType::EOS, true);
-
-            return IncludeStmt::new(str_.clone()).into();
-        }
-
-        errors::LIST
-            .lock()
-            .unwrap()
-            .push(ParserError::ExpectedStringInclude, Some(cur_tok));
-
-        empty
-    }
-
     //this is syntax sugar for `if a { b }`
     pub fn get_do_statement(&mut self) -> Statement {
         let statement = self.get_declaration(false).unwrap();
@@ -643,10 +605,6 @@ impl<'a> Parser<'a> {
 
         if self.match_tokens(&[TokenType::Return]) {
             return Some(self.get_return_statement());
-        }
-
-        if self.match_tokens(&[TokenType::Include]) {
-            return Some(self.get_include_statement());
         }
 
         if self.match_tokens(&[TokenType::Do]) {

@@ -25,4 +25,4 @@ bin_search = (arr, to_find){
     return -1
 }
 
-println(bin_search(arr, 14))
+println(bin_search(arr, 13))
