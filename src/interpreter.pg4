@@ -27,30 +27,7 @@ statement: expression_stmt | block | if_stmt | while_stmt | break_stmt | continu
 
 expression_stmt: expression EOS;
 
-block: '{' declaration* '}';#[derive(Clone, Debug)]
-pub struct VarStmt {
-    pub name: Token,
-    pub init: Expression,
-    pub is_static: bool,
-}
-
-impl VarStmt {
-    pub fn new(name: Token, init: Expression) -> Self {
-        Self {
-            name,
-            init,
-            is_static: false,
-        }
-    }
-}
-
-impl From<VarStmt> for Statement {
-    fn from(value: VarStmt) -> Self {
-        Self::Variable(Box::new(value))
-    }
-}
-
-
+block: '{' declaration* '}';
 
 if_stmt: 'if' expression block ('else' (if_stmt | block))?;
 
