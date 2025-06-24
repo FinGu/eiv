@@ -318,7 +318,7 @@ impl Lexer {
             };
         }
 
-        if self.next() != '\'' {
+        if self.done() || self.next() != '\'' {
             return Err(LexError::UnterminatedChar);
         }
 
