@@ -35,8 +35,8 @@ while_stmt: 'while' expression block;
 
 for_stmt: 'for' full_either_declaration? EOS expression? EOS full_either_declaration? block;
 
-break_stmt 'break' EOS;
-continue_stmt 'continue' EOS;
+break_stmt: 'break' EOS;
+continue_stmt: 'continue' EOS;
 return_stmt: 'return' expression EOS;
 do_stmt: 'do' declaration 'if' expression EOS;
 
@@ -53,7 +53,7 @@ cast: call ('as' cast_type)*;
 
 call: primary (arr_primary | '(' arguments? ')' | '.' IDENTIFIER | '::' IDENTIFIER)*; 
 
-arr_primary: '[' expression ']' ('|' NUMBER)?
+arr_primary: '[' expression ']' ('|' NUMBER)?;
 
 primary: NUMBER | STRING | 'true' | 'false' | 'null' | 'this' | '(' expression ')' | '[' arguments? ']' | IDENTIFIER;
 
