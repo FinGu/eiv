@@ -23,7 +23,7 @@ array_declaration: '[' arguments? ']';
 fn_declaration: '(' fn_parameters? ')' block;
 fn_parameters: IDENTIFIER (',' IDENTIFIER )*;
 
-statement: expression_stmt | block | if_stmt | while_stmt | break_stmt | continue_stmt | return_stmt | break_stmt | do_stmt;
+statement: expression_stmt | block | if_stmt | while_stmt | for_stmt | continue_stmt | return_stmt | break_stmt | do_stmt;
 
 expression_stmt: expression EOS;
 
