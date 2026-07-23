@@ -10,7 +10,7 @@ full_either_declaration: IDENTIFIER either_declaration;
 
 either_declaration: normal_declaration | shorthand_declaration;
 
-normal_declaration: '=' (fn_declaration | class_declaration | array_declaration | expression);
+normal_declaration: '=' (fn_declaration | class_declaration | expression);
 
 shorthand_declaration: ('+=' | '-=' | '*=' | '/=')expression;
 
@@ -18,7 +18,6 @@ function_lim_declaration: 'stat'? IDENTIFIER '=' fn_declaration;
 class_declaration: '{' function_lim_declaration* '}';
 
 arguments: expression (','expression)*;
-array_declaration: '[' arguments? ']';
 
 fn_declaration: '(' fn_parameters? ')' block;
 fn_parameters: IDENTIFIER (',' IDENTIFIER )*;
